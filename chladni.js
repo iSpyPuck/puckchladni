@@ -19,11 +19,16 @@ const MIN_NOTE_FREQUENCY = 130.81; // C3
 const MAX_NOTE_FREQUENCY = 523.25; // C5
 const MIN_FREQUENCY_MAPPING = 20; // Hz - minimum frequency for audio visualization mapping
 const MAX_FREQUENCY_MAPPING = 2000; // Hz - maximum frequency for audio visualization mapping
+const FREQUENCY_LOG_OFFSET = 1; // Offset to prevent Math.log(0) errors
 const NOTE_DURATION = 2; // seconds - duration of synthesized instrument notes
 const NOTE_ATTACK_TIME = 0.1; // seconds - ADSR envelope attack time
 const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
 const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
+const M_PARAM_MIN = 1; // Minimum value for m parameter
+const M_PARAM_MAX = 50; // Maximum value for m parameter
+const N_PARAM_MIN = 10; // Minimum value for n parameter (offset for variety)
+const N_PARAM_MAX = 40; // Maximum value for n parameter (offset for variety)
 
 // Note frequencies mapping
 const noteFrequencies = {
@@ -350,15 +355,15 @@ const updateAudioVisualization = () => {
   // Use logarithmic scaling for better musical representation
   // Human hearing is logarithmic (musical notes are exponential in frequency)
   if (dominantFrequency > 0) {
-    // Map frequency to m (1-50)
-    m = mapFrequencyToRange(dominantFrequency + 1, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, 1, 50);
-    m = constrain(m, 1, 50);
+    // Map frequency to m parameter, adding offset to prevent Math.log(0)
+    m = mapFrequencyToRange(dominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
+    m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
   }
   
   if (secondDominantFrequency > 0) {
-    // Map second frequency to n (1-50)
-    n = mapFrequencyToRange(secondDominantFrequency + 1, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, 1, 50);
-    n = constrain(n, 1, 50);
+    // Map second frequency to n parameter, adding offset to prevent Math.log(0)
+    n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
+    n = constrain(n, M_PARAM_MIN, M_PARAM_MAX);
   }
 
   // update slider displays to reflect audio-driven values
@@ -445,11 +450,11 @@ const playInstrumentNote = () => {
   
   // Update visualization parameters based on note frequency
   // Map frequency to m and n for visualization using logarithmic scaling
-  // Use slightly different mappings to create interesting patterns
-  m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 1, 50);
-  n = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 10, 40);
-  m = constrain(m, 1, 50);
-  n = constrain(n, 1, 50);
+  // Use different range mappings to create interesting pattern variations
+  m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
+  n = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
+  m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
+  n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
   
   sliders.m.value(m);
   sliders.n.value(n);

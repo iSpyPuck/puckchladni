@@ -25,6 +25,22 @@
 	<h1>Settings</h1>
 	<form id="settings">
 		<fieldset>
+			<legend>audio file:</legend>
+
+			<label for="audioFile">Upload audio:</label>
+			<input name="audioFile" type="file" id="audioFile" accept="audio/*">
+
+			<div id="audioControls" style="display:none;">
+				<button type="button" id="playPauseBtn">Play</button>
+				<button type="button" id="rewind15Btn">-15s</button>
+				<button type="button" id="rewindFrameBtn">-1 frame</button>
+				<button type="button" id="forwardFrameBtn">+1 frame</button>
+				<button type="button" id="forward15Btn">+15s</button>
+				<div id="timeDisplay">0:00 / 0:00</div>
+			</div>
+		</fieldset>
+
+		<fieldset>
 			<legend>frequency parameters:</legend>
 
 			<label for="mSlider">m</label>

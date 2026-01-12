@@ -17,6 +17,13 @@ const FRAME_TIME = 1/60; // ~60 fps, approximately 16.67ms per frame
 const FREQUENCY_BIN_THRESHOLD = 10; // Minimum bin distance between frequency peaks
 const MIN_NOTE_FREQUENCY = 130.81; // C3
 const MAX_NOTE_FREQUENCY = 523.25; // C5
+const MIN_FREQUENCY_MAPPING = 20; // Hz - minimum frequency for audio visualization mapping
+const MAX_FREQUENCY_MAPPING = 2000; // Hz - maximum frequency for audio visualization mapping
+const NOTE_DURATION = 2; // seconds - duration of synthesized instrument notes
+const NOTE_ATTACK_TIME = 0.1; // seconds - ADSR envelope attack time
+const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
+const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
+const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 
 // Note frequencies mapping
 const noteFrequencies = {
@@ -338,14 +345,14 @@ const updateAudioVisualization = () => {
   // Use logarithmic scaling for better musical representation
   // Human hearing is logarithmic (musical notes are exponential in frequency)
   if (dominantFrequency > 0) {
-    // Map frequency (20 Hz - 2000 Hz) to m (1-50)
-    m = Math.floor(map(Math.log(dominantFrequency + 1), Math.log(20), Math.log(2000), 1, 50));
+    // Map frequency to m (1-50)
+    m = Math.floor(map(Math.log(dominantFrequency + 1), Math.log(MIN_FREQUENCY_MAPPING), Math.log(MAX_FREQUENCY_MAPPING), 1, 50));
     m = constrain(m, 1, 50);
   }
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n (1-50)
-    n = Math.floor(map(Math.log(secondDominantFrequency + 1), Math.log(20), Math.log(2000), 1, 50));
+    n = Math.floor(map(Math.log(secondDominantFrequency + 1), Math.log(MIN_FREQUENCY_MAPPING), Math.log(MAX_FREQUENCY_MAPPING), 1, 50));
     n = constrain(n, 1, 50);
   }
 
@@ -376,7 +383,11 @@ const playInstrumentNote = () => {
   
   // Stop any existing instrument oscillator
   if (instrumentOscillator) {
-    instrumentOscillator.stop();
+    try {
+      instrumentOscillator.stop();
+    } catch (e) {
+      // Oscillator may have already stopped
+    }
     instrumentOscillator = null;
   }
   
@@ -410,11 +421,11 @@ const playInstrumentNote = () => {
   
   instrumentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
   
-  // Set up gain (volume) with fade in and fade out
+  // Set up gain (volume) with ADSR envelope (fade in and fade out)
   instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
-  instrumentGain.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
-  instrumentGain.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 1.5);
-  instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 2);
+  instrumentGain.gain.linearRampToValueAtTime(NOTE_PEAK_GAIN, audioContext.currentTime + NOTE_ATTACK_TIME);
+  instrumentGain.gain.linearRampToValueAtTime(NOTE_SUSTAIN_GAIN, audioContext.currentTime + NOTE_SUSTAIN_TIME);
+  instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
   
   // Connect nodes
   instrumentOscillator.connect(instrumentGain);
@@ -422,7 +433,7 @@ const playInstrumentNote = () => {
   
   // Start and stop
   instrumentOscillator.start(audioContext.currentTime);
-  instrumentOscillator.stop(audioContext.currentTime + 2);
+  instrumentOscillator.stop(audioContext.currentTime + NOTE_DURATION);
   
   // Update visualization parameters based on note frequency
   // Map frequency to m and n for visualization

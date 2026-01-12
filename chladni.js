@@ -436,9 +436,10 @@ const playInstrumentNote = () => {
   instrumentOscillator.stop(audioContext.currentTime + NOTE_DURATION);
   
   // Update visualization parameters based on note frequency
-  // Map frequency to m and n for visualization
+  // Map frequency to m and n for visualization using logarithmic scaling
+  // Use slightly different mappings to create interesting patterns
   m = Math.floor(map(Math.log(frequency), Math.log(MIN_NOTE_FREQUENCY), Math.log(MAX_NOTE_FREQUENCY), 1, 50));
-  n = Math.floor(map(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 1, 50));
+  n = Math.floor(map(Math.log(frequency), Math.log(MIN_NOTE_FREQUENCY), Math.log(MAX_NOTE_FREQUENCY), 10, 40));
   m = constrain(m, 1, 50);
   n = constrain(n, 1, 50);
   

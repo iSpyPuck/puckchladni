@@ -209,6 +209,11 @@ const updateParams = () => {
 
 /* Audio functions */
 
+// Helper function to map frequency to a range using logarithmic scaling
+const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) => {
+  return Math.floor(map(Math.log(frequency), Math.log(minFreq), Math.log(maxFreq), minRange, maxRange));
+};
+
 const handleAudioUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -346,13 +351,13 @@ const updateAudioVisualization = () => {
   // Human hearing is logarithmic (musical notes are exponential in frequency)
   if (dominantFrequency > 0) {
     // Map frequency to m (1-50)
-    m = Math.floor(map(Math.log(dominantFrequency + 1), Math.log(MIN_FREQUENCY_MAPPING), Math.log(MAX_FREQUENCY_MAPPING), 1, 50));
+    m = mapFrequencyToRange(dominantFrequency + 1, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, 1, 50);
     m = constrain(m, 1, 50);
   }
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n (1-50)
-    n = Math.floor(map(Math.log(secondDominantFrequency + 1), Math.log(MIN_FREQUENCY_MAPPING), Math.log(MAX_FREQUENCY_MAPPING), 1, 50));
+    n = mapFrequencyToRange(secondDominantFrequency + 1, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, 1, 50);
     n = constrain(n, 1, 50);
   }
 
@@ -386,7 +391,10 @@ const playInstrumentNote = () => {
     try {
       instrumentOscillator.stop();
     } catch (e) {
-      // Oscillator may have already stopped
+      // Log unexpected errors, ignore expected "already stopped" errors
+      if (e.name !== 'InvalidStateError') {
+        console.warn('Error stopping oscillator:', e);
+      }
     }
     instrumentOscillator = null;
   }
@@ -438,8 +446,8 @@ const playInstrumentNote = () => {
   // Update visualization parameters based on note frequency
   // Map frequency to m and n for visualization using logarithmic scaling
   // Use slightly different mappings to create interesting patterns
-  m = Math.floor(map(Math.log(frequency), Math.log(MIN_NOTE_FREQUENCY), Math.log(MAX_NOTE_FREQUENCY), 1, 50));
-  n = Math.floor(map(Math.log(frequency), Math.log(MIN_NOTE_FREQUENCY), Math.log(MAX_NOTE_FREQUENCY), 10, 40));
+  m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 1, 50);
+  n = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 10, 40);
   m = constrain(m, 1, 50);
   n = constrain(n, 1, 50);
   

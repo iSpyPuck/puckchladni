@@ -143,6 +143,11 @@ const handleAudioUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
+  // disconnect existing audio source if present
+  if (audioSource) {
+    audioSource.disconnect();
+  }
+
   // create audio element
   if (audioElement) {
     audioElement.pause();
@@ -170,6 +175,8 @@ const handleAudioUpload = (event) => {
   
   audioElement.addEventListener('loadedmetadata', () => {
     updateTimeDisplay();
+    // revoke object URL after loading to prevent memory leak
+    URL.revokeObjectURL(url);
   });
 }
 
@@ -188,7 +195,9 @@ const togglePlayPause = () => {
 const skipTime = (seconds) => {
   if (!audioElement) return;
   
-  audioElement.currentTime = Math.max(0, Math.min(audioElement.duration, audioElement.currentTime + seconds));
+  const duration = audioElement.duration || 0;
+  const newTime = audioElement.currentTime + seconds;
+  audioElement.currentTime = Math.max(0, Math.min(duration, newTime));
   updateTimeDisplay();
 }
 

@@ -27,8 +27,8 @@ const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 const M_PARAM_MIN = 1; // Minimum value for m parameter
 const M_PARAM_MAX = 50; // Maximum value for m parameter
-const N_PARAM_MIN = 10; // Minimum value for n parameter (offset for variety)
-const N_PARAM_MAX = 40; // Maximum value for n parameter (offset for variety)
+const N_PARAM_MIN = 1; // Minimum value for n parameter  
+const N_PARAM_MAX = 50; // Maximum value for n parameter
 
 // Note frequencies mapping
 const noteFrequencies = {
@@ -362,8 +362,8 @@ const updateAudioVisualization = () => {
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n parameter, adding offset to prevent Math.log(0)
-    n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-    n = constrain(n, M_PARAM_MIN, M_PARAM_MAX);
+    n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
+    n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
   }
 
   // update slider displays to reflect audio-driven values
@@ -450,9 +450,10 @@ const playInstrumentNote = () => {
   
   // Update visualization parameters based on note frequency
   // Map frequency to m and n for visualization using logarithmic scaling
-  // Use different range mappings to create interesting pattern variations
+  // Use harmonic relationship for n (frequency * 1.5) to create pattern variations
+  const harmonicFrequency = frequency * 1.5; // Create harmonic for n parameter
   m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
-  n = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
+  n = mapFrequencyToRange(harmonicFrequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY * 1.5, N_PARAM_MIN, N_PARAM_MAX);
   m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
   n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
   

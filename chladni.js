@@ -12,7 +12,11 @@ let audioLoaded = false;
 let audioControls, playPauseBtn, timeDisplay, frameDisplay, seekSlider;
 let instrumentOscillator = null;
 let instrumentGain = null;
+let isSeekbarActive = false; // Track when user is actively dragging seekbar
 const FRAME_TIME = 1/60; // ~60 fps, approximately 16.67ms per frame
+const FREQUENCY_BIN_THRESHOLD = 10; // Minimum bin distance between frequency peaks
+const MIN_NOTE_FREQUENCY = 130.81; // C3
+const MAX_NOTE_FREQUENCY = 523.25; // C5
 
 // Note frequencies mapping
 const noteFrequencies = {
@@ -81,6 +85,10 @@ const DOMinit = () => {
   document.getElementById('forward10Btn').addEventListener('click', () => skipTime(10));
   
   // setup seek slider
+  seekSlider.addEventListener('mousedown', () => { isSeekbarActive = true; });
+  seekSlider.addEventListener('mouseup', () => { isSeekbarActive = false; });
+  seekSlider.addEventListener('touchstart', () => { isSeekbarActive = true; });
+  seekSlider.addEventListener('touchend', () => { isSeekbarActive = false; });
   seekSlider.addEventListener('input', handleSeek);
   seekSlider.addEventListener('change', handleSeek);
 
@@ -275,8 +283,8 @@ const updateTimeDisplay = () => {
   const totalFrames = Math.floor(duration / FRAME_TIME);
   frameDisplay.textContent = `Frame: ${currentFrame} / ${totalFrames}`;
   
-  // Update seek slider without triggering input event
-  if (!seekSlider.matches(':active')) {
+  // Update seek slider without triggering input event (only if user isn't actively dragging)
+  if (!isSeekbarActive) {
     seekSlider.value = duration > 0 ? (current / duration) * 100 : 0;
   }
 }
@@ -316,10 +324,9 @@ const updateAudioVisualization = () => {
   // Also find secondary peak for n parameter
   let secondMaxAmplitude = 0;
   let secondDominantBin = 0;
-  const binThreshold = 10; // minimum distance from first peak
   
   for (let i = 1; i < bufferLength; i++) {
-    if (Math.abs(i - dominantFrequencyBin) > binThreshold && dataArray[i] > secondMaxAmplitude) {
+    if (Math.abs(i - dominantFrequencyBin) > FREQUENCY_BIN_THRESHOLD && dataArray[i] > secondMaxAmplitude) {
       secondMaxAmplitude = dataArray[i];
       secondDominantBin = i;
     }
@@ -419,8 +426,8 @@ const playInstrumentNote = () => {
   
   // Update visualization parameters based on note frequency
   // Map frequency to m and n for visualization
-  m = Math.floor(map(Math.log(frequency), Math.log(130), Math.log(524), 1, 50));
-  n = Math.floor(map(frequency, 130, 524, 1, 50));
+  m = Math.floor(map(Math.log(frequency), Math.log(MIN_NOTE_FREQUENCY), Math.log(MAX_NOTE_FREQUENCY), 1, 50));
+  n = Math.floor(map(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, 1, 50));
   m = constrain(m, 1, 50);
   n = constrain(n, 1, 50);
   

@@ -25,18 +25,59 @@
 	<h1>Settings</h1>
 	<form id="settings">
 		<fieldset>
-			<legend>audio file:</legend>
+			<legend>audio source:</legend>
 
 			<label for="audioFile">Upload audio:</label>
 			<input name="audioFile" type="file" id="audioFile" accept="audio/*">
 
+			<br><br>
+
+			<label for="instrumentSelect">Or select instrument:</label>
+			<select name="instrumentSelect" id="instrumentSelect">
+				<option value="">-- Select Instrument --</option>
+				<option value="piano">Piano</option>
+				<option value="guitar">Guitar</option>
+				<option value="violin">Violin</option>
+				<option value="flute">Flute</option>
+				<option value="trumpet">Trumpet</option>
+				<option value="cello">Cello</option>
+			</select>
+
+			<br>
+
+			<label for="noteSelect">Note/Key:</label>
+			<select name="noteSelect" id="noteSelect" disabled>
+				<option value="">-- Select Note --</option>
+				<option value="C3">C3 (130.81 Hz)</option>
+				<option value="D3">D3 (146.83 Hz)</option>
+				<option value="E3">E3 (164.81 Hz)</option>
+				<option value="F3">F3 (174.61 Hz)</option>
+				<option value="G3">G3 (196.00 Hz)</option>
+				<option value="A3">A3 (220.00 Hz)</option>
+				<option value="B3">B3 (246.94 Hz)</option>
+				<option value="C4">C4 (261.63 Hz)</option>
+				<option value="D4">D4 (293.66 Hz)</option>
+				<option value="E4">E4 (329.63 Hz)</option>
+				<option value="F4">F4 (349.23 Hz)</option>
+				<option value="G4">G4 (392.00 Hz)</option>
+				<option value="A4">A4 (440.00 Hz)</option>
+				<option value="B4">B4 (493.88 Hz)</option>
+				<option value="C5">C5 (523.25 Hz)</option>
+			</select>
+
+			<button type="button" id="playNoteBtn" disabled>Play Note</button>
+
 			<div id="audioControls" style="display:none;">
 				<button type="button" id="playPauseBtn">Play</button>
-				<button type="button" id="rewind15Btn">-15s</button>
+				<button type="button" id="rewind10Btn">-10s</button>
 				<button type="button" id="rewindFrameBtn">-1 frame</button>
 				<button type="button" id="forwardFrameBtn">+1 frame</button>
-				<button type="button" id="forward15Btn">+15s</button>
+				<button type="button" id="forward10Btn">+10s</button>
+				<div id="audioSeekbar">
+					<input type="range" id="seekSlider" min="0" max="100" value="0" step="0.1">
+				</div>
 				<div id="timeDisplay">0:00 / 0:00</div>
+				<div id="frameDisplay">Frame: 0 / 0</div>
 			</div>
 		</fieldset>
 
@@ -44,12 +85,14 @@
 			<legend>frequency parameters:</legend>
 
 			<label for="mSlider">m</label>
-			<input name="mSlider" type="range" id="mSlider" min="1" max="10" step="1" value="7">
+			<input name="mSlider" type="range" id="mSlider" min="1" max="50" step="1" value="7">
+			<span id="mValue">7</span>
 
 			<br>
 
 			<label for="nSlider">n</label>
-			<input name="nSlider" type="range" id="nSlider" min="1" max="10" step="1" value="2">
+			<input name="nSlider" type="range" id="nSlider" min="1" max="50" step="1" value="2">
+			<span id="nValue">2</span>
 		</fieldset>	
 
 		<label for="vSlider">vibration strength:</label>

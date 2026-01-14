@@ -364,13 +364,13 @@ const updateAudioVisualization = () => {
   if (dominantFrequency > 0) {
     // Map frequency to m parameter, adding offset to prevent Math.log(0)
     m = mapFrequencyToRange(dominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-    m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
+    m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
   }
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n parameter, adding offset to prevent Math.log(0)
     n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
-    n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
+    n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   }
 
   // update slider displays to reflect audio-driven values
@@ -755,8 +755,8 @@ const analyzeInstrumentSpectrum = (instrument) => {
   }
   
   // Constrain to valid ranges
-  m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
-  n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
+  m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
+  n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   
   // Update sliders and displays
   sliders.m.value(m);

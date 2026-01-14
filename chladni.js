@@ -85,6 +85,29 @@ const DOMinit = () => {
     nValueDisplay.textContent = sliders.n.value();
   });
 
+  // Mobile menu toggle
+  const toggleBtn = document.getElementById('toggleSettingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  
+  toggleBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('open');
+    toggleBtn.classList.toggle('active');
+  });
+  
+  // Close settings panel when clicking outside on mobile
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth <= 768) {
+      if (!settingsPanel.contains(e.target) && !toggleBtn.contains(e.target) && settingsPanel.classList.contains('open')) {
+        settingsPanel.classList.remove('open');
+        toggleBtn.classList.remove('active');
+      }
+    }
+  });
+
+  // Screenshot button
+  const screenshotBtn = document.getElementById('screenshotBtn');
+  screenshotBtn.addEventListener('click', copyScreenshotToClipboard);
+
   // audio controls
   audioControls = document.getElementById('audioControls');
   playPauseBtn = document.getElementById('playPauseBtn');
@@ -793,6 +816,68 @@ const drawHeatmap = () => {
 const wipeScreen = () => {
   background(30);
   stroke(255);
+}
+
+/* Screenshot and Clipboard Functions */
+
+const copyScreenshotToClipboard = async () => {
+  try {
+    // Get the p5.js canvas element
+    const canvas = document.querySelector('canvas');
+    if (!canvas) {
+      showNotification('Canvas not found', 'error');
+      return;
+    }
+
+    // Check if clipboard API is supported
+    if (!navigator.clipboard || !navigator.clipboard.write) {
+      showNotification('Clipboard API not supported in this browser', 'error');
+      return;
+    }
+
+    // Convert canvas to blob
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        showNotification('Failed to capture screenshot', 'error');
+        return;
+      }
+
+      try {
+        // Create clipboard item with the image blob
+        const clipboardItem = new ClipboardItem({ 'image/png': blob });
+        
+        // Write to clipboard
+        await navigator.clipboard.write([clipboardItem]);
+        
+        showNotification('Screenshot copied to clipboard!', 'success');
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        showNotification('Failed to copy screenshot. Try again.', 'error');
+      }
+    }, 'image/png');
+
+  } catch (err) {
+    console.error('Screenshot error:', err);
+    showNotification('An error occurred. Please try again.', 'error');
+  }
+}
+
+const showNotification = (message, type = 'success') => {
+  const notification = document.getElementById('notification');
+  notification.textContent = message;
+  notification.className = 'notification show';
+  
+  // Add success/error styling if needed
+  if (type === 'error') {
+    notification.style.backgroundColor = 'rgba(200, 50, 50, 0.9)';
+  } else {
+    notification.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+  }
+  
+  // Hide notification after 3 seconds
+  setTimeout(() => {
+    notification.classList.remove('show');
+  }, 3000);
 }
 
 

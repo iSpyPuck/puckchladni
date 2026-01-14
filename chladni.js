@@ -418,42 +418,42 @@ const playInstrumentNote = () => {
       harmonicMultiplierM = 1.0;  // Pure fundamental
       harmonicMultiplierN = 1.5;  // Perfect fifth harmonic
       offsetM = 0;
-      offsetN = 2;
+      offsetN = 1;
       break;
     case 'guitar':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.0;  // Fundamental
       harmonicMultiplierN = 2.0;  // Octave harmonic
       offsetM = 1;
-      offsetN = -1;
+      offsetN = 0;
       break;
     case 'violin':
       waveform = 'sawtooth';
-      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierM = 1.05; // Slightly sharp fundamental (violin characteristic)
       harmonicMultiplierN = 3.0;  // Twelfth harmonic (octave + fifth)
-      offsetM = -1;
-      offsetN = 3;
+      offsetM = 0;
+      offsetN = 2;
       break;
     case 'flute':
       waveform = 'sine';
       harmonicMultiplierM = 1.0;  // Pure fundamental
       harmonicMultiplierN = 2.5;  // Higher harmonic
-      offsetM = 2;
+      offsetM = 1;
       offsetN = 1;
       break;
     case 'trumpet':
       waveform = 'square';
-      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierM = 1.02; // Slightly bright fundamental
       harmonicMultiplierN = 2.5;  // Complex harmonic
-      offsetM = 3;
-      offsetN = -2;
+      offsetM = 2;
+      offsetN = 0;
       break;
     case 'cello':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = 1.33; // Fourth harmonic
-      offsetM = -2;
-      offsetN = 2;
+      harmonicMultiplierN = 1.33; // Perfect fourth interval
+      offsetM = 0;
+      offsetN = -1;
       break;
     default:
       waveform = 'sine';

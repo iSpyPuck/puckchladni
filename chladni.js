@@ -486,8 +486,13 @@ const playInstrumentNote = () => {
   const frequencyM = frequency * harmonicMultiplierM;
   const frequencyN = frequency * harmonicMultiplierN;
   
-  m = mapFrequencyToRange(frequencyM, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX) + offsetM;
-  n = mapFrequencyToRange(frequencyN, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY * 1.5, N_PARAM_MIN, N_PARAM_MAX) + offsetN;
+  // Calculate proper mapping ranges that account for harmonic multipliers
+  // Max multipliers: 1.05 for M, 3.0 for N
+  const maxFrequencyM = MAX_NOTE_FREQUENCY * 1.05;
+  const maxFrequencyN = MAX_NOTE_FREQUENCY * 3.0;
+  
+  m = mapFrequencyToRange(frequencyM, MIN_NOTE_FREQUENCY, maxFrequencyM, M_PARAM_MIN, M_PARAM_MAX) + offsetM;
+  n = mapFrequencyToRange(frequencyN, MIN_NOTE_FREQUENCY, maxFrequencyN, N_PARAM_MIN, N_PARAM_MAX) + offsetN;
   m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
   n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
   

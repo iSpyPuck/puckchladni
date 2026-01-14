@@ -223,7 +223,12 @@ const updateParams = () => {
 
 // Helper function to map frequency to a range using logarithmic scaling
 const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) => {
-  return Math.floor(map(Math.log(frequency), Math.log(minFreq), Math.log(maxFreq), minRange, maxRange));
+  // Vanilla JS map function: map value from [in_min, in_max] to [out_min, out_max]
+  const logFreq = Math.log(frequency);
+  const logMinFreq = Math.log(minFreq);
+  const logMaxFreq = Math.log(maxFreq);
+  const mapped = (logFreq - logMinFreq) * (maxRange - minRange) / (logMaxFreq - logMinFreq) + minRange;
+  return Math.floor(mapped);
 };
 
 const handleAudioUpload = (event) => {

@@ -16,11 +16,14 @@ header {
 	position: fixed;
 	top: 0;
 	left: 0;
-	background-color: rgba(0,0,0,0.4);
+	background-color: rgba(0,0,0,0.85);
 	border-radius: 5px;
 	margin: 10px;
 	padding: 10px;
 	z-index: 2;
+	transition: transform 0.3s ease-in-out;
+	max-height: calc(100vh - 20px);
+	overflow-y: auto;
 }
 h1 {
 	font-size: 18px;
@@ -129,4 +132,183 @@ footer {
 }
 footer:hover {
 	opacity: 1;
+}
+
+/* Hamburger menu button */
+.hamburger-btn {
+	position: fixed;
+	top: 15px;
+	left: 15px;
+	z-index: 3;
+	background-color: rgba(0,0,0,0.85);
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 5px;
+	padding: 10px;
+	cursor: pointer;
+	display: none; /* Hidden by default, shown on mobile */
+	flex-direction: column;
+	gap: 4px;
+	width: 44px;
+	height: 44px;
+	justify-content: center;
+	align-items: center;
+}
+
+.hamburger-btn span {
+	display: block;
+	width: 20px;
+	height: 2px;
+	background-color: white;
+	transition: all 0.3s ease-in-out;
+}
+
+.hamburger-btn:hover {
+	background-color: rgba(255,255,255,0.2);
+}
+
+.hamburger-btn.active span:nth-child(1) {
+	transform: translateY(6px) rotate(45deg);
+}
+
+.hamburger-btn.active span:nth-child(2) {
+	opacity: 0;
+}
+
+.hamburger-btn.active span:nth-child(3) {
+	transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Screenshot button */
+.screenshot-btn {
+	position: fixed;
+	bottom: 15px;
+	right: 15px;
+	z-index: 3;
+	background-color: rgba(0,0,0,0.85);
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 50%;
+	padding: 10px;
+	cursor: pointer;
+	width: 50px;
+	height: 50px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	color: white;
+	transition: background-color 0.3s ease;
+}
+
+.screenshot-btn:hover {
+	background-color: rgba(255,255,255,0.2);
+}
+
+.screenshot-btn svg {
+	width: 24px;
+	height: 24px;
+}
+
+/* Notification */
+.notification {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%) scale(0);
+	background-color: rgba(0,0,0,0.9);
+	color: white;
+	padding: 15px 25px;
+	border-radius: 8px;
+	z-index: 1000;
+	font-family: monospace;
+	font-size: 14px;
+	opacity: 0;
+	transition: all 0.3s ease-in-out;
+	pointer-events: none;
+	max-width: 80%;
+	text-align: center;
+}
+
+.notification.show {
+	opacity: 1;
+	transform: translate(-50%, -50%) scale(1);
+}
+
+/* Mobile responsive styles */
+@media screen and (max-width: 768px) {
+	.hamburger-btn {
+		display: flex;
+	}
+	
+	header {
+		transform: translateX(-120%);
+		margin: 0;
+		border-radius: 0 5px 5px 0;
+		max-width: 85vw;
+		padding: 15px;
+	}
+	
+	header.open {
+		transform: translateX(0);
+	}
+	
+	h1 {
+		font-size: 20px;
+	}
+	
+	button {
+		padding: 8px 12px;
+		font-size: 14px;
+		min-height: 44px;
+	}
+	
+	select {
+		min-height: 44px;
+		font-size: 14px;
+	}
+	
+	input[type="range"] {
+		min-height: 44px;
+	}
+	
+	fieldset>input {
+		width: 100%;
+		min-width: unset;
+	}
+	
+	footer {
+		z-index: 3;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	header {
+		max-width: 90vw;
+		font-size: 13px;
+	}
+	
+	h1 {
+		font-size: 18px;
+		margin-bottom: 10px;
+	}
+	
+	button {
+		font-size: 13px;
+		padding: 10px 14px;
+	}
+	
+	select {
+		font-size: 13px;
+		min-width: 150px;
+	}
+	
+	.screenshot-btn {
+		width: 56px;
+		height: 56px;
+		bottom: 20px;
+		right: 20px;
+	}
+	
+	.screenshot-btn svg {
+		width: 28px;
+		height: 28px;
+	}
 }

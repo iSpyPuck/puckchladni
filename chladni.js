@@ -722,42 +722,43 @@ const analyzeInstrumentSpectrum = (instrument) => {
   // Weight vibrational modes based on spectral energy distribution
   // m and n parameters control the Chladni pattern complexity
   
-  if (instrument === 'piano') {
-    // Piano has more high-frequency content, so use higher mode numbers
-    // Weight towards higher m and n values based on harmonic energy
-    const highHarmonicWeight = bandEnergies.high_harmonics + bandEnergies.mid_harmonics;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.5 + highHarmonicWeight * 0.5));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.4 + highHarmonicWeight * 0.6));
-  } else if (instrument === 'guitar') {
-    // Guitar emphasizes fundamental and low harmonics, use lower mode numbers
-    const lowHarmonicWeight = bandEnergies.fundamental + bandEnergies.low_harmonics;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.2 + lowHarmonicWeight * 0.3));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.1 + lowHarmonicWeight * 0.4));
-  } else if (instrument === 'violin') {
-    // Violin has rich harmonic content with odd harmonic emphasis
-    const oddHarmonicWeight = bandEnergies.mid_harmonics + bandEnergies.low_harmonics * 0.5;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.4 + oddHarmonicWeight * 0.5));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.5 + oddHarmonicWeight * 0.4));
-  } else if (instrument === 'flute') {
-    // Flute is mostly fundamental with very weak harmonics
-    const fundamentalWeight = bandEnergies.fundamental;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.1 + fundamentalWeight * 0.2));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.15 + fundamentalWeight * 0.25));
-  } else if (instrument === 'trumpet') {
-    // Trumpet has bright, strong harmonics across the spectrum
-    const brightWeight = bandEnergies.high_harmonics + bandEnergies.mid_harmonics * 1.2;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.55 + brightWeight * 0.4));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + brightWeight * 0.5));
-  } else if (instrument === 'cello') {
-    // Cello has warm, balanced tone with strong low-to-mid harmonics
-    const warmWeight = bandEnergies.low_harmonics + bandEnergies.mid_harmonics * 0.7;
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.3 + warmWeight * 0.4));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.25 + warmWeight * 0.45));
-  } else {
-    // Default mapping
-    m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
-    n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
-  }
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+// Assume bandEnergies are already normalized fractions.
+// If not, normalize them before this block.
+
+let w; // instrument weight, 0..1
+if (instrument === 'piano') {
+  w = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
+  // Strong push upward
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w));
+} else if (instrument === 'guitar') {
+  w = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
+  // Keep it low
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w));
+} else if (instrument === 'violin') {
+  w = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w));
+} else if (instrument === 'flute') {
+  w = clamp01(bandEnergies.fundamental);
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w));
+} else if (instrument === 'trumpet') {
+  w = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w));
+} else if (instrument === 'cello') {
+  w = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
+  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w));
+  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w));
+} else {
+  m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
+  n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
+}
+
   
   // Constrain to valid ranges
   m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));

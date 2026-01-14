@@ -59,6 +59,45 @@ const chladni = (x, y, a, b, m, n) =>
 + b * sin(pi*m*x) * sin(pi*n*y);
 
 
+/* Mobile UI Initialization - runs immediately, not dependent on p5.js */
+
+// Initialize mobile UI as soon as DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initMobileUI);
+} else {
+  initMobileUI();
+}
+
+function initMobileUI() {
+  // Mobile menu toggle
+  const toggleBtn = document.getElementById('toggleSettingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  
+  if (toggleBtn && settingsPanel) {
+    toggleBtn.addEventListener('click', () => {
+      settingsPanel.classList.toggle('open');
+      toggleBtn.classList.toggle('active');
+    });
+    
+    // Close settings panel when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768) {
+        if (!settingsPanel.contains(e.target) && !toggleBtn.contains(e.target) && settingsPanel.classList.contains('open')) {
+          settingsPanel.classList.remove('open');
+          toggleBtn.classList.remove('active');
+        }
+      }
+    });
+  }
+
+  // Screenshot button
+  const screenshotBtn = document.getElementById('screenshotBtn');
+  if (screenshotBtn) {
+    screenshotBtn.addEventListener('click', copyScreenshotToClipboard);
+  }
+}
+
+
 /* Initialization */
 
 const DOMinit = () => {
@@ -84,29 +123,6 @@ const DOMinit = () => {
   sliders.n.input(() => {
     nValueDisplay.textContent = sliders.n.value();
   });
-
-  // Mobile menu toggle
-  const toggleBtn = document.getElementById('toggleSettingsBtn');
-  const settingsPanel = document.getElementById('settingsPanel');
-  
-  toggleBtn.addEventListener('click', () => {
-    settingsPanel.classList.toggle('open');
-    toggleBtn.classList.toggle('active');
-  });
-  
-  // Close settings panel when clicking outside on mobile
-  document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-      if (!settingsPanel.contains(e.target) && !toggleBtn.contains(e.target) && settingsPanel.classList.contains('open')) {
-        settingsPanel.classList.remove('open');
-        toggleBtn.classList.remove('active');
-      }
-    }
-  });
-
-  // Screenshot button
-  const screenshotBtn = document.getElementById('screenshotBtn');
-  screenshotBtn.addEventListener('click', copyScreenshotToClipboard);
 
   // audio controls
   audioControls = document.getElementById('audioControls');

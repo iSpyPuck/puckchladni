@@ -408,30 +408,62 @@ const playInstrumentNote = () => {
   instrumentOscillator = audioContext.createOscillator();
   instrumentGain = audioContext.createGain();
   
-  // Set waveform based on instrument
+  // Define instrument characteristics for both audio and visualization
+  // Each instrument has: waveform, harmonic multipliers, and parameter offsets
+  let waveform, harmonicMultiplierM, harmonicMultiplierN, offsetM, offsetN;
+  
   switch(instrument) {
     case 'piano':
-      instrumentOscillator.type = 'triangle';
+      waveform = 'triangle';
+      harmonicMultiplierM = 1.0;  // Pure fundamental
+      harmonicMultiplierN = 1.5;  // Perfect fifth harmonic
+      offsetM = 0;
+      offsetN = 2;
       break;
     case 'guitar':
-      instrumentOscillator.type = 'sawtooth';
+      waveform = 'sawtooth';
+      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierN = 2.0;  // Octave harmonic
+      offsetM = 1;
+      offsetN = -1;
       break;
     case 'violin':
-      instrumentOscillator.type = 'sawtooth';
+      waveform = 'sawtooth';
+      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierN = 3.0;  // Twelfth harmonic (octave + fifth)
+      offsetM = -1;
+      offsetN = 3;
       break;
     case 'flute':
-      instrumentOscillator.type = 'sine';
+      waveform = 'sine';
+      harmonicMultiplierM = 1.0;  // Pure fundamental
+      harmonicMultiplierN = 2.5;  // Higher harmonic
+      offsetM = 2;
+      offsetN = 1;
       break;
     case 'trumpet':
-      instrumentOscillator.type = 'square';
+      waveform = 'square';
+      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierN = 2.5;  // Complex harmonic
+      offsetM = 3;
+      offsetN = -2;
       break;
     case 'cello':
-      instrumentOscillator.type = 'sawtooth';
+      waveform = 'sawtooth';
+      harmonicMultiplierM = 1.0;  // Fundamental
+      harmonicMultiplierN = 1.33; // Fourth harmonic
+      offsetM = -2;
+      offsetN = 2;
       break;
     default:
-      instrumentOscillator.type = 'sine';
+      waveform = 'sine';
+      harmonicMultiplierM = 1.0;
+      harmonicMultiplierN = 1.5;
+      offsetM = 0;
+      offsetN = 0;
   }
   
+  instrumentOscillator.type = waveform;
   instrumentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
   
   // Set up gain (volume) with ADSR envelope (fade in and fade out)
@@ -448,12 +480,14 @@ const playInstrumentNote = () => {
   instrumentOscillator.start(audioContext.currentTime);
   instrumentOscillator.stop(audioContext.currentTime + NOTE_DURATION);
   
-  // Update visualization parameters based on note frequency
+  // Update visualization parameters based on note frequency and instrument characteristics
   // Map frequency to m and n for visualization using logarithmic scaling
-  // Use harmonic relationship for n (frequency * 1.5) to create pattern variations
-  const harmonicFrequency = frequency * 1.5; // Create harmonic for n parameter
-  m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
-  n = mapFrequencyToRange(harmonicFrequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY * 1.5, N_PARAM_MIN, N_PARAM_MAX);
+  // Apply instrument-specific harmonic multipliers to create distinctive patterns
+  const frequencyM = frequency * harmonicMultiplierM;
+  const frequencyN = frequency * harmonicMultiplierN;
+  
+  m = mapFrequencyToRange(frequencyM, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX) + offsetM;
+  n = mapFrequencyToRange(frequencyN, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY * 1.5, N_PARAM_MIN, N_PARAM_MAX) + offsetN;
   m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
   n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
   

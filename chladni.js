@@ -223,7 +223,12 @@ const updateParams = () => {
 
 // Helper function to map frequency to a range using logarithmic scaling
 const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) => {
-  return Math.floor(map(Math.log(frequency), Math.log(minFreq), Math.log(maxFreq), minRange, maxRange));
+  // Vanilla JS map function: map value from [in_min, in_max] to [out_min, out_max]
+  const logFreq = Math.log(frequency);
+  const logMinFreq = Math.log(minFreq);
+  const logMaxFreq = Math.log(maxFreq);
+  const mapped = (logFreq - logMinFreq) * (maxRange - minRange) / (logMaxFreq - logMinFreq) + minRange;
+  return Math.floor(mapped);
 };
 
 const handleAudioUpload = (event) => {
@@ -364,13 +369,13 @@ const updateAudioVisualization = () => {
   if (dominantFrequency > 0) {
     // Map frequency to m parameter, adding offset to prevent Math.log(0)
     m = mapFrequencyToRange(dominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-    m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
+    m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
   }
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n parameter, adding offset to prevent Math.log(0)
     n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
-    n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
+    n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   }
 
   // update slider displays to reflect audio-driven values
@@ -411,106 +416,363 @@ const playInstrumentNote = () => {
     instrumentOscillator = null;
   }
   
-  // Create oscillator for the note
+  // Initialize analyser if not already done
+  if (!analyser) {
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+  }
+  
+  // Create base oscillator for the C3 note
   instrumentOscillator = audioContext.createOscillator();
+  instrumentOscillator.type = 'sine'; // Start with pure sine wave
+  instrumentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+  
+  // Create gain node for the main signal
   instrumentGain = audioContext.createGain();
   
-  // Define instrument characteristics for both audio and visualization
-  // Each instrument has: waveform, harmonic multipliers, and parameter offsets
-  let waveform, harmonicMultiplierM, harmonicMultiplierN, offsetM, offsetN;
+  // Apply instrument-specific impulse response / resonance filter
+  let harmonicOscillators = [];
+  let harmonicGains = [];
   
   switch(instrument) {
     case 'piano':
-      waveform = 'triangle';
-      harmonicMultiplierM = 1.0;  // Pure fundamental
-      harmonicMultiplierN = PERFECT_FIFTH_INTERVAL;  // Perfect fifth harmonic
-      offsetM = 0;
-      offsetN = 1;
+      // Piano: stronger high-order harmonic content, slower decay
+      // Add multiple harmonics with emphasis on higher partials
+      for (let i = 1; i <= 8; i++) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Piano has stronger higher harmonics (bell-like characteristic)
+        // Amplitude decreases but not as rapidly as guitar
+        const amplitude = i <= 3 ? 0.15 / i : 0.10 / i;
+        
+        // Slower decay for piano (sustain pedal effect)
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.05);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.8, audioContext.currentTime + 1.8);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser); // Connect to analyser for FFT
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Main oscillator with strong fundamental
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.05);
+      instrumentGain.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + 1.8);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
       break;
+      
     case 'guitar':
-      waveform = 'sawtooth';
-      harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = OCTAVE_INTERVAL;  // Octave harmonic
-      offsetM = 1;
-      offsetN = 0;
+      // Guitar: emphasize fundamental and low harmonics, faster decay
+      // Add fewer harmonics with emphasis on fundamental and lower partials
+      for (let i = 1; i <= 5; i++) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Guitar has stronger fundamental, weaker higher harmonics
+        const amplitude = i === 1 ? 0.25 : 0.08 / (i * 1.5);
+        
+        // Faster decay for guitar (string damping)
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.03);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.3, audioContext.currentTime + 0.8);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION * 0.6);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser); // Connect to analyser for FFT
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Main oscillator with very strong fundamental
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.03);
+      instrumentGain.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.8);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION * 0.6);
       break;
+      
     case 'violin':
-      waveform = 'sawtooth';
-      harmonicMultiplierM = 1.05; // Slightly sharp fundamental (violin characteristic)
-      harmonicMultiplierN = 3.0;  // Triple frequency (octave + fifth interval)
-      offsetM = 0;
-      offsetN = 2;
+      // Violin: rich harmonic content with emphasis on odd harmonics, moderate decay
+      // Characteristic bowing sound with strong 3rd, 5th, 7th harmonics
+      for (let i = 1; i <= 7; i++) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Violin emphasizes odd harmonics (sawtooth-like spectrum)
+        const amplitude = (i % 2 === 1) ? 0.18 / i : 0.10 / i;
+        
+        // Moderate decay with slight vibrato effect
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.08);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.7, audioContext.currentTime + 1.5);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser);
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Main oscillator
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.22, audioContext.currentTime + 0.08);
+      instrumentGain.gain.linearRampToValueAtTime(0.18, audioContext.currentTime + 1.5);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
       break;
+      
     case 'flute':
-      waveform = 'sine';
-      harmonicMultiplierM = 1.0;  // Pure fundamental
-      harmonicMultiplierN = 2.5;  // Higher harmonic
-      offsetM = 1;
-      offsetN = 1;
+      // Flute: pure tone with minimal harmonics, very smooth
+      // Mostly fundamental with weak even harmonics
+      for (let i = 2; i <= 4; i += 2) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Very weak harmonics for flute (mostly pure tone)
+        const amplitude = 0.05 / i;
+        
+        // Smooth, sustained decay
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.12);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.9, audioContext.currentTime + 1.7);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser);
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Very strong fundamental for flute
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.35, audioContext.currentTime + 0.12);
+      instrumentGain.gain.linearRampToValueAtTime(0.30, audioContext.currentTime + 1.7);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
       break;
+      
     case 'trumpet':
-      waveform = 'square';
-      harmonicMultiplierM = 1.02; // Slightly bright fundamental
-      harmonicMultiplierN = 2.5;  // Complex harmonic
-      offsetM = 2;
-      offsetN = 0;
+      // Trumpet: bright, brassy tone with strong even and odd harmonics
+      // Characteristic brass sound with prominent upper partials
+      for (let i = 1; i <= 9; i++) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Trumpet has bright, even harmonic distribution (square-wave-like)
+        const amplitude = i <= 5 ? 0.16 / i : 0.12 / i;
+        
+        // Medium-fast decay with strong attack
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.04);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.6, audioContext.currentTime + 1.2);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION * 0.8);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser);
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Strong fundamental with bright attack
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.04);
+      instrumentGain.gain.linearRampToValueAtTime(0.18, audioContext.currentTime + 1.2);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION * 0.8);
       break;
+      
     case 'cello':
-      waveform = 'sawtooth';
-      harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = PERFECT_FOURTH_INTERVAL;  // Perfect fourth interval
-      offsetM = 0;
-      offsetN = -1;
+      // Cello: warm, rich tone with balanced harmonics, slower decay than violin
+      // Lower register instrument with strong low-to-mid harmonics
+      for (let i = 1; i <= 6; i++) {
+        const harmonicOsc = audioContext.createOscillator();
+        const harmonicGain = audioContext.createGain();
+        
+        harmonicOsc.type = 'sine';
+        harmonicOsc.frequency.setValueAtTime(frequency * i, audioContext.currentTime);
+        
+        // Cello has warm, balanced harmonic content
+        const amplitude = i <= 3 ? 0.17 / i : 0.11 / i;
+        
+        // Slow, sustained decay characteristic of bowed strings
+        harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude, audioContext.currentTime + 0.1);
+        harmonicGain.gain.linearRampToValueAtTime(amplitude * 0.75, audioContext.currentTime + 1.6);
+        harmonicGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
+        
+        harmonicOsc.connect(harmonicGain);
+        harmonicGain.connect(audioContext.destination);
+        harmonicGain.connect(analyser);
+        
+        harmonicOscillators.push(harmonicOsc);
+        harmonicGains.push(harmonicGain);
+      }
+      
+      // Strong, warm fundamental
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(0.24, audioContext.currentTime + 0.1);
+      instrumentGain.gain.linearRampToValueAtTime(0.19, audioContext.currentTime + 1.6);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
       break;
+      
     default:
-      waveform = 'sine';
-      harmonicMultiplierM = 1.0;
-      harmonicMultiplierN = PERFECT_FIFTH_INTERVAL;
-      offsetM = 0;
-      offsetN = 0;
+      // Default simple envelope
+      instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+      instrumentGain.gain.linearRampToValueAtTime(NOTE_PEAK_GAIN, audioContext.currentTime + NOTE_ATTACK_TIME);
+      instrumentGain.gain.linearRampToValueAtTime(NOTE_SUSTAIN_GAIN, audioContext.currentTime + NOTE_SUSTAIN_TIME);
+      instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
   }
   
-  instrumentOscillator.type = waveform;
-  instrumentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-  
-  // Set up gain (volume) with ADSR envelope (fade in and fade out)
-  instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
-  instrumentGain.gain.linearRampToValueAtTime(NOTE_PEAK_GAIN, audioContext.currentTime + NOTE_ATTACK_TIME);
-  instrumentGain.gain.linearRampToValueAtTime(NOTE_SUSTAIN_GAIN, audioContext.currentTime + NOTE_SUSTAIN_TIME);
-  instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
-  
-  // Connect nodes
+  // Connect main oscillator
   instrumentOscillator.connect(instrumentGain);
   instrumentGain.connect(audioContext.destination);
+  instrumentGain.connect(analyser); // Connect to analyser for FFT
   
-  // Start and stop
+  // Start all oscillators
   instrumentOscillator.start(audioContext.currentTime);
   instrumentOscillator.stop(audioContext.currentTime + NOTE_DURATION);
   
-  // Update visualization parameters based on note frequency and instrument characteristics
-  // Map frequency to m and n for visualization using logarithmic scaling
-  // Apply instrument-specific harmonic multipliers to create distinctive patterns
-  const frequencyM = frequency * harmonicMultiplierM;
-  const frequencyN = frequency * harmonicMultiplierN;
+  for (let osc of harmonicOscillators) {
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + NOTE_DURATION);
+  }
   
-  // Calculate proper mapping ranges that account for maximum harmonic multipliers
-  const maxFrequencyM = MAX_NOTE_FREQUENCY * MAX_HARMONIC_MULTIPLIER_M;
-  const maxFrequencyN = MAX_NOTE_FREQUENCY * MAX_HARMONIC_MULTIPLIER_N;
-  
-  m = mapFrequencyToRange(frequencyM, MIN_NOTE_FREQUENCY, maxFrequencyM, M_PARAM_MIN, M_PARAM_MAX) + offsetM;
-  n = mapFrequencyToRange(frequencyN, MIN_NOTE_FREQUENCY, maxFrequencyN, N_PARAM_MIN, N_PARAM_MAX) + offsetN;
-  m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
-  n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
-  
-  sliders.m.value(m);
-  sliders.n.value(n);
-  document.getElementById('mValue').textContent = m;
-  document.getElementById('nValue').textContent = n;
+  // Perform FFT analysis after a short delay to capture the sound
+  setTimeout(() => {
+    analyzeInstrumentSpectrum(instrument);
+  }, 500); // Wait 500ms for sound to develop and harmonics to establish
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
     instrumentGain = null;
+    // Clean up harmonic oscillators
+    harmonicOscillators = [];
+    harmonicGains = [];
   };
+}
+
+// Analyze the frequency spectrum and weight vibrational modes accordingly
+const analyzeInstrumentSpectrum = (instrument) => {
+  if (!analyser) return;
+  
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  analyser.getByteFrequencyData(dataArray);
+  
+  // Get audio context sample rate to calculate exact frequency
+  const sampleRate = audioContext.sampleRate;
+  const frequencyResolution = sampleRate / analyser.fftSize;
+  
+  // Calculate spectral energy distribution
+  // Find energy in different frequency bands
+  const fundamentalFreq = noteFrequencies['C3'];
+  const fundamentalBin = Math.round(fundamentalFreq / frequencyResolution);
+  
+  // Define frequency bands for analysis
+  const bands = [
+    { name: 'fundamental', startBin: Math.max(1, fundamentalBin - 2), endBin: fundamentalBin + 2 },
+    { name: 'low_harmonics', startBin: fundamentalBin + 3, endBin: Math.round((fundamentalFreq * 3) / frequencyResolution) },
+    { name: 'mid_harmonics', startBin: Math.round((fundamentalFreq * 3) / frequencyResolution) + 1, endBin: Math.round((fundamentalFreq * 6) / frequencyResolution) },
+    { name: 'high_harmonics', startBin: Math.round((fundamentalFreq * 6) / frequencyResolution) + 1, endBin: Math.min(bufferLength - 1, Math.round((fundamentalFreq * 10) / frequencyResolution)) }
+  ];
+  
+  // Calculate energy in each band
+  const bandEnergies = {};
+  let totalEnergy = 0;
+  
+  for (let band of bands) {
+    let energy = 0;
+    for (let i = band.startBin; i <= band.endBin && i < bufferLength; i++) {
+      energy += dataArray[i];
+    }
+    bandEnergies[band.name] = energy;
+    totalEnergy += energy;
+  }
+  
+  // Normalize band energies
+  for (let bandName in bandEnergies) {
+    bandEnergies[bandName] = totalEnergy > 0 ? bandEnergies[bandName] / totalEnergy : 0;
+  }
+  
+  // Weight vibrational modes based on spectral energy distribution
+  // m and n parameters control the Chladni pattern complexity
+  
+  if (instrument === 'piano') {
+    // Piano has more high-frequency content, so use higher mode numbers
+    // Weight towards higher m and n values based on harmonic energy
+    const highHarmonicWeight = bandEnergies.high_harmonics + bandEnergies.mid_harmonics;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.5 + highHarmonicWeight * 0.5));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.4 + highHarmonicWeight * 0.6));
+  } else if (instrument === 'guitar') {
+    // Guitar emphasizes fundamental and low harmonics, use lower mode numbers
+    const lowHarmonicWeight = bandEnergies.fundamental + bandEnergies.low_harmonics;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.2 + lowHarmonicWeight * 0.3));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.1 + lowHarmonicWeight * 0.4));
+  } else if (instrument === 'violin') {
+    // Violin has rich harmonic content with odd harmonic emphasis
+    const oddHarmonicWeight = bandEnergies.mid_harmonics + bandEnergies.low_harmonics * 0.5;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.4 + oddHarmonicWeight * 0.5));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.5 + oddHarmonicWeight * 0.4));
+  } else if (instrument === 'flute') {
+    // Flute is mostly fundamental with very weak harmonics
+    const fundamentalWeight = bandEnergies.fundamental;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.1 + fundamentalWeight * 0.2));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.15 + fundamentalWeight * 0.25));
+  } else if (instrument === 'trumpet') {
+    // Trumpet has bright, strong harmonics across the spectrum
+    const brightWeight = bandEnergies.high_harmonics + bandEnergies.mid_harmonics * 1.2;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.55 + brightWeight * 0.4));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + brightWeight * 0.5));
+  } else if (instrument === 'cello') {
+    // Cello has warm, balanced tone with strong low-to-mid harmonics
+    const warmWeight = bandEnergies.low_harmonics + bandEnergies.mid_harmonics * 0.7;
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.3 + warmWeight * 0.4));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.25 + warmWeight * 0.45));
+  } else {
+    // Default mapping
+    m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
+    n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
+  }
+  
+  // Constrain to valid ranges
+  m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
+  n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
+  
+  // Update sliders and displays
+  // Handle both p5.js sliders and vanilla JS fallback
+  const mSlider = sliders?.m?.elt || document.getElementById('mSlider');
+  const nSlider = sliders?.n?.elt || document.getElementById('nSlider');
+  
+  if (mSlider) mSlider.value = m;
+  if (nSlider) nSlider.value = n;
+  
+  document.getElementById('mValue').textContent = m;
+  document.getElementById('nValue').textContent = n;
 }
 
 const drawHeatmap = () => {

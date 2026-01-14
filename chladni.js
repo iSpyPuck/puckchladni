@@ -26,9 +26,9 @@ const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
 const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 const M_PARAM_MIN = 1; // Minimum value for m parameter
-const M_PARAM_MAX = 50; // Maximum value for m parameter
+const M_PARAM_MAX = 18; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
-const N_PARAM_MAX = 50; // Maximum value for n parameter
+const N_PARAM_MAX = 18; // Maximum value for n parameter
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
 
@@ -48,7 +48,7 @@ const noteFrequencies = {
 const settings = {
   nParticles : 10000,
   canvasSize : [600, 600],
-  drawHeatmap : true
+  drawHeatmap : false
 }
 
 const pi = 3.1415926535;

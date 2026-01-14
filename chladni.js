@@ -759,8 +759,13 @@ const analyzeInstrumentSpectrum = (instrument) => {
   n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   
   // Update sliders and displays
-  sliders.m.value(m);
-  sliders.n.value(n);
+  // Handle both p5.js sliders and vanilla JS fallback
+  const mSlider = sliders.m?.elt || document.getElementById('mSlider');
+  const nSlider = sliders.n?.elt || document.getElementById('nSlider');
+  
+  if (mSlider) mSlider.value = m;
+  if (nSlider) nSlider.value = n;
+  
   document.getElementById('mValue').textContent = m;
   document.getElementById('nValue').textContent = n;
 }

@@ -48,7 +48,7 @@ const noteFrequencies = {
 const settings = {
   nParticles : 10000,
   canvasSize : [600, 600],
-  drawHeatmap : false
+  drawHeatmap : true
 }
 
 const pi = 3.1415926535;

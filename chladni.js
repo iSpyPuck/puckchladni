@@ -137,6 +137,8 @@ const DOMinit = () => {
   });
 
   playNoteBtn.addEventListener('click', playInstrumentNote);
+  
+  // Note: Settings toggle and copy screenshot are handled by standalone script in index.html
 }
 
 const setupParticles = () => {

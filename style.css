@@ -6,10 +6,37 @@ html, body {
 	background: #191919;
 	font-family: monospace;
 	font-size: 14px;
+	overflow-x: hidden;
 }
 a {
 	color: inherit;
 	text-decoration: none;
+}
+
+/* Toggle button for mobile */
+#toggleSettingsBtn {
+	display: none; /* Hidden by default, shown on mobile */
+	position: fixed;
+	top: 10px;
+	left: 10px;
+	background-color: rgba(0,0,0,0.6);
+	color: white;
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 5px;
+	padding: 12px 15px;
+	cursor: pointer;
+	z-index: 3;
+	font-size: 20px;
+	min-width: 44px;
+	min-height: 44px;
+	transition: background-color 0.3s ease;
+}
+#toggleSettingsBtn:hover {
+	background-color: rgba(0,0,0,0.8);
+}
+.hamburger-icon {
+	display: block;
+	line-height: 1;
 }
 
 header {
@@ -21,10 +48,76 @@ header {
 	margin: 10px;
 	padding: 10px;
 	z-index: 2;
+	transition: transform 0.3s ease, opacity 0.3s ease;
+}
+header.collapsed {
+	transform: translateX(-110%);
+	opacity: 0;
+	pointer-events: none;
+}
+.header-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 15px;
+	margin-bottom: 10px;
 }
 h1 {
 	font-size: 18px;
-	margin-top: 0;
+	margin: 0;
+	flex: 1;
+}
+
+/* Copy Screenshot Button */
+.icon-btn {
+	background-color: rgba(255,255,255,0.1);
+	color: white;
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 18px;
+	padding: 8px 12px;
+	min-width: 44px;
+	min-height: 44px;
+	transition: background-color 0.3s ease, transform 0.1s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.icon-btn:hover {
+	background-color: rgba(255,255,255,0.2);
+}
+.icon-btn:active {
+	transform: scale(0.95);
+}
+
+/* Feedback Message */
+.feedback-message {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background-color: rgba(0,0,0,0.9);
+	color: white;
+	padding: 20px 30px;
+	border-radius: 8px;
+	border: 2px solid rgba(255,255,255,0.3);
+	font-size: 16px;
+	z-index: 10;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.3s ease;
+}
+.feedback-message.show {
+	opacity: 1;
+}
+.feedback-message.error {
+	border-color: rgba(255,100,100,0.6);
+	background-color: rgba(100,0,0,0.9);
+}
+.feedback-message.success {
+	border-color: rgba(100,255,100,0.6);
+	background-color: rgba(0,100,0,0.9);
 }
 #settings {
 	display: flex;
@@ -129,4 +222,96 @@ footer {
 }
 footer:hover {
 	opacity: 1;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+	/* Show toggle button on mobile */
+	#toggleSettingsBtn {
+		display: block;
+	}
+
+	/* Settings panel styles on mobile */
+	header {
+		width: calc(100% - 20px);
+		max-width: 400px;
+		margin: 10px;
+		max-height: calc(100vh - 20px);
+		overflow-y: auto;
+	}
+	
+	/* Hide settings when collapsed (default state) */
+	header.collapsed {
+		transform: translateX(-110%);
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	/* Larger touch targets */
+	button {
+		padding: 10px 15px;
+		font-size: 14px;
+		min-height: 44px;
+	}
+
+	/* Larger slider touch targets */
+	input[type="range"] {
+		height: 30px;
+	}
+
+	/* Larger select dropdowns */
+	select {
+		padding: 10px;
+		font-size: 14px;
+		min-height: 44px;
+	}
+
+	/* Adjust fieldset sliders */
+	fieldset>input {
+		width: 100%;
+		min-width: unset;
+	}
+
+	/* Better spacing for labels */
+	label {
+		padding-top: 15px;
+		display: block;
+	}
+
+	/* Footer positioning adjustment */
+	footer {
+		top: 10px;
+		right: 10px;
+		font-size: 22px;
+	}
+}
+
+@media (max-width: 480px) {
+	/* Even larger text and buttons for small mobile */
+	html, body {
+		font-size: 16px;
+	}
+
+	h1 {
+		font-size: 20px;
+	}
+
+	button {
+		font-size: 16px;
+	}
+
+	.header-top {
+		flex-wrap: wrap;
+	}
+
+	/* Adjust file input for small screens */
+	input[type="file"] {
+		font-size: 12px;
+		padding: 8px;
+	}
+
+	/* Adjust time display */
+	#timeDisplay, #frameDisplay {
+		font-size: 14px;
+	}
 }

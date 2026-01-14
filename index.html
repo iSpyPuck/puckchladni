@@ -17,12 +17,115 @@
 
 <!-- Local scripts -->
 <script src="chladni.js" type="text/javascript"></script>
+
+<!-- Standalone initialization for mobile toggle (runs immediately) -->
+<script>
+// Initialize mobile toggle immediately when DOM loads
+document.addEventListener('DOMContentLoaded', function() {
+  const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const copyScreenshotBtn = document.getElementById('copyScreenshotBtn');
+  
+  // On mobile, collapse settings by default
+  if (window.innerWidth <= 768 && settingsPanel) {
+    settingsPanel.classList.add('collapsed');
+  }
+  
+  // Toggle settings panel
+  if (toggleSettingsBtn && settingsPanel) {
+    toggleSettingsBtn.addEventListener('click', function() {
+      settingsPanel.classList.toggle('collapsed');
+    });
+  }
+  
+  // Copy screenshot functionality
+  if (copyScreenshotBtn) {
+    copyScreenshotBtn.addEventListener('click', function() {
+      copyCanvasToClipboardStandalone();
+    });
+  }
+});
+
+// Standalone copy function that doesn't depend on p5.js being loaded
+function copyCanvasToClipboardStandalone() {
+  try {
+    const canvas = document.querySelector('#sketch-container canvas');
+    
+    if (!canvas) {
+      showFeedbackStandalone('Canvas not found', 'error');
+      return;
+    }
+
+    if (!navigator.clipboard || !navigator.clipboard.write) {
+      downloadCanvasStandalone(canvas);
+      return;
+    }
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        showFeedbackStandalone('Failed to create image', 'error');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        showFeedbackStandalone('Screenshot copied!', 'success');
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        showFeedbackStandalone('Clipboard not supported. Downloading instead...', 'error');
+        setTimeout(() => downloadCanvasStandalone(canvas), 1000);
+      }
+    }, 'image/png');
+
+  } catch (err) {
+    console.error('Error in copyCanvasToClipboard:', err);
+    showFeedbackStandalone('Failed to copy screenshot', 'error');
+  }
+}
+
+function downloadCanvasStandalone(canvas) {
+  try {
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `chladni-pattern-${timestamp}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    showFeedbackStandalone('Screenshot downloaded!', 'success');
+  } catch (err) {
+    console.error('Failed to download:', err);
+    showFeedbackStandalone('Download failed', 'error');
+  }
+}
+
+function showFeedbackStandalone(message, type) {
+  const feedbackEl = document.getElementById('feedbackMessage');
+  if (!feedbackEl) return;
+  
+  feedbackEl.textContent = message;
+  feedbackEl.className = 'feedback-message show ' + type;
+  
+  setTimeout(() => {
+    feedbackEl.classList.remove('show');
+  }, 2000);
+}
+</script>
 </head>
 
 <body>
 
-<header>
-	<h1>Settings</h1>
+<button id="toggleSettingsBtn" class="toggle-btn" aria-label="Toggle Settings">
+	<span class="hamburger-icon">☰</span>
+</button>
+
+<header id="settingsPanel">
+	<div class="header-top">
+		<h1>Settings</h1>
+		<button id="copyScreenshotBtn" class="icon-btn" aria-label="Copy Screenshot" title="Copy Screenshot">
+			📷
+		</button>
+	</div>
 	<form id="settings">
 		<fieldset>
 			<legend>audio source:</legend>
@@ -104,6 +207,8 @@
 </header>
 
 <main id="sketch-container"></main>
+
+<div id="feedbackMessage" class="feedback-message"></div>
 
 <footer>
 	<a alt="More info" href="https://github.com/addiebarron/chladni" target="_blank">&#9432;</a>

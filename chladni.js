@@ -9,8 +9,34 @@ let minWalk = 0.002;
 // audio variables
 let audioContext, analyser, audioSource, audioElement;
 let audioLoaded = false;
-let audioControls, playPauseBtn, timeDisplay;
+let audioControls, playPauseBtn, timeDisplay, frameDisplay, seekSlider;
+let instrumentOscillator = null;
+let instrumentGain = null;
+let isSeekbarActive = false; // Track when user is actively dragging seekbar
 const FRAME_TIME = 1/60; // ~60 fps, approximately 16.67ms per frame
+const FREQUENCY_BIN_THRESHOLD = 10; // Minimum bin distance between frequency peaks
+const MIN_NOTE_FREQUENCY = 130.81; // C3
+const MAX_NOTE_FREQUENCY = 523.25; // C5
+const MIN_FREQUENCY_MAPPING = 20; // Hz - minimum frequency for audio visualization mapping
+const MAX_FREQUENCY_MAPPING = 2000; // Hz - maximum frequency for audio visualization mapping
+const FREQUENCY_LOG_OFFSET = 1; // Offset to prevent Math.log(0) errors
+const NOTE_DURATION = 2; // seconds - duration of synthesized instrument notes
+const NOTE_ATTACK_TIME = 0.1; // seconds - ADSR envelope attack time
+const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
+const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
+const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
+const M_PARAM_MIN = 1; // Minimum value for m parameter
+const M_PARAM_MAX = 50; // Maximum value for m parameter
+const N_PARAM_MIN = 1; // Minimum value for n parameter  
+const N_PARAM_MAX = 50; // Maximum value for n parameter
+
+// Note frequencies mapping
+const noteFrequencies = {
+  'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61,
+  'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
+  'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23,
+  'G4': 392.00, 'A4': 440.00, 'B4': 493.88, 'C5': 523.25
+};
 
 const settings = {
   nParticles : 10000,
@@ -40,10 +66,24 @@ const DOMinit = () => {
     num : select('#numSlider'), // number
   }
 
+  // slider value displays
+  const mValueDisplay = document.getElementById('mValue');
+  const nValueDisplay = document.getElementById('nValue');
+  
+  // update value displays when sliders change
+  sliders.m.input(() => {
+    mValueDisplay.textContent = sliders.m.value();
+  });
+  sliders.n.input(() => {
+    nValueDisplay.textContent = sliders.n.value();
+  });
+
   // audio controls
   audioControls = document.getElementById('audioControls');
   playPauseBtn = document.getElementById('playPauseBtn');
   timeDisplay = document.getElementById('timeDisplay');
+  frameDisplay = document.getElementById('frameDisplay');
+  seekSlider = document.getElementById('seekSlider');
 
   // setup audio file upload
   const audioFileInput = document.getElementById('audioFile');
@@ -51,10 +91,45 @@ const DOMinit = () => {
 
   // setup playback controls
   document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
-  document.getElementById('rewind15Btn').addEventListener('click', () => skipTime(-15));
+  document.getElementById('rewind10Btn').addEventListener('click', () => skipTime(-10));
   document.getElementById('rewindFrameBtn').addEventListener('click', () => skipTime(-FRAME_TIME));
   document.getElementById('forwardFrameBtn').addEventListener('click', () => skipTime(FRAME_TIME));
-  document.getElementById('forward15Btn').addEventListener('click', () => skipTime(15));
+  document.getElementById('forward10Btn').addEventListener('click', () => skipTime(10));
+  
+  // setup seek slider
+  seekSlider.addEventListener('mousedown', () => { isSeekbarActive = true; });
+  seekSlider.addEventListener('mouseup', () => { isSeekbarActive = false; });
+  seekSlider.addEventListener('touchstart', () => { isSeekbarActive = true; });
+  seekSlider.addEventListener('touchend', () => { isSeekbarActive = false; });
+  seekSlider.addEventListener('input', handleSeek);
+  seekSlider.addEventListener('change', handleSeek);
+
+  // setup instrument controls
+  const instrumentSelect = document.getElementById('instrumentSelect');
+  const noteSelect = document.getElementById('noteSelect');
+  const playNoteBtn = document.getElementById('playNoteBtn');
+  
+  instrumentSelect.addEventListener('change', () => {
+    if (instrumentSelect.value) {
+      noteSelect.disabled = false;
+      if (noteSelect.value) {
+        playNoteBtn.disabled = false;
+      }
+    } else {
+      noteSelect.disabled = true;
+      playNoteBtn.disabled = true;
+    }
+  });
+
+  noteSelect.addEventListener('change', () => {
+    if (noteSelect.value && instrumentSelect.value) {
+      playNoteBtn.disabled = false;
+    } else {
+      playNoteBtn.disabled = true;
+    }
+  });
+
+  playNoteBtn.addEventListener('click', playInstrumentNote);
 }
 
 const setupParticles = () => {
@@ -139,6 +214,11 @@ const updateParams = () => {
 
 /* Audio functions */
 
+// Helper function to map frequency to a range using logarithmic scaling
+const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) => {
+  return Math.floor(map(Math.log(frequency), Math.log(minFreq), Math.log(maxFreq), minRange, maxRange));
+};
+
 const handleAudioUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -214,6 +294,25 @@ const updateTimeDisplay = () => {
   };
 
   timeDisplay.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+  
+  // Update frame display
+  const currentFrame = Math.floor(current / FRAME_TIME);
+  const totalFrames = Math.floor(duration / FRAME_TIME);
+  frameDisplay.textContent = `Frame: ${currentFrame} / ${totalFrames}`;
+  
+  // Update seek slider without triggering input event (only if user isn't actively dragging)
+  if (!isSeekbarActive) {
+    seekSlider.value = duration > 0 ? (current / duration) * 100 : 0;
+  }
+}
+
+const handleSeek = (event) => {
+  if (!audioElement) return;
+  
+  const duration = audioElement.duration || 0;
+  const seekTime = (event.target.value / 100) * duration;
+  audioElement.currentTime = seekTime;
+  updateTimeDisplay();
 }
 
 const updateAudioVisualization = () => {
@@ -221,41 +320,152 @@ const updateAudioVisualization = () => {
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteFrequencyData(dataArray);
 
-  // analyze frequency data to extract dominant frequencies
-  // use lower frequencies for more interesting patterns
-  let lowFreqSum = 0;
-  let midFreqSum = 0;
-  let lowCount = 0;
-  let midCount = 0;
+  // Get audio context sample rate to calculate exact frequency
+  const sampleRate = audioContext.sampleRate;
+  const frequencyResolution = sampleRate / analyser.fftSize;
 
-  // split frequency range into low and mid
-  const lowFreqEnd = Math.floor(bufferLength * 0.15);
-  const midFreqEnd = Math.floor(bufferLength * 0.4);
-
-  for (let i = 0; i < lowFreqEnd; i++) {
-    lowFreqSum += dataArray[i];
-    lowCount++;
-  }
-  for (let i = lowFreqEnd; i < midFreqEnd; i++) {
-    midFreqSum += dataArray[i];
-    midCount++;
+  // Find the dominant frequency with highest amplitude
+  let maxAmplitude = 0;
+  let dominantFrequencyBin = 0;
+  
+  for (let i = 1; i < bufferLength; i++) {
+    if (dataArray[i] > maxAmplitude) {
+      maxAmplitude = dataArray[i];
+      dominantFrequencyBin = i;
+    }
   }
 
-  const lowFreqAvg = lowFreqSum / lowCount;
-  const midFreqAvg = midFreqSum / midCount;
+  // Calculate exact dominant frequency in Hz
+  const dominantFrequency = dominantFrequencyBin * frequencyResolution;
 
-  // map frequency data to m and n parameters (1-10 range)
-  // scale from 0-255 byte values to 1-10
-  m = Math.floor(map(lowFreqAvg, 0, 255, 1, 10));
-  n = Math.floor(map(midFreqAvg, 0, 255, 1, 10));
+  // Also find secondary peak for n parameter
+  let secondMaxAmplitude = 0;
+  let secondDominantBin = 0;
+  
+  for (let i = 1; i < bufferLength; i++) {
+    if (Math.abs(i - dominantFrequencyBin) > FREQUENCY_BIN_THRESHOLD && dataArray[i] > secondMaxAmplitude) {
+      secondMaxAmplitude = dataArray[i];
+      secondDominantBin = i;
+    }
+  }
+  
+  const secondDominantFrequency = secondDominantBin * frequencyResolution;
 
-  // ensure values are in valid range
-  m = constrain(m, 1, 10);
-  n = constrain(n, 1, 10);
+  // Map frequencies to m and n parameters
+  // Use logarithmic scaling for better musical representation
+  // Human hearing is logarithmic (musical notes are exponential in frequency)
+  if (dominantFrequency > 0) {
+    // Map frequency to m parameter, adding offset to prevent Math.log(0)
+    m = mapFrequencyToRange(dominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
+    m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
+  }
+  
+  if (secondDominantFrequency > 0) {
+    // Map second frequency to n parameter, adding offset to prevent Math.log(0)
+    n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
+    n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
+  }
 
   // update slider displays to reflect audio-driven values
   sliders.m.value(m);
   sliders.n.value(n);
+  
+  // Update value displays
+  document.getElementById('mValue').textContent = m;
+  document.getElementById('nValue').textContent = n;
+}
+
+const playInstrumentNote = () => {
+  const instrumentSelect = document.getElementById('instrumentSelect');
+  const noteSelect = document.getElementById('noteSelect');
+  
+  const instrument = instrumentSelect.value;
+  const note = noteSelect.value;
+  
+  if (!instrument || !note) return;
+  
+  const frequency = noteFrequencies[note];
+  
+  // Initialize audio context if needed
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  
+  // Stop any existing instrument oscillator
+  if (instrumentOscillator) {
+    try {
+      instrumentOscillator.stop();
+    } catch (e) {
+      // Log unexpected errors, ignore expected "already stopped" errors
+      if (e.name !== 'InvalidStateError') {
+        console.warn('Error stopping oscillator:', e);
+      }
+    }
+    instrumentOscillator = null;
+  }
+  
+  // Create oscillator for the note
+  instrumentOscillator = audioContext.createOscillator();
+  instrumentGain = audioContext.createGain();
+  
+  // Set waveform based on instrument
+  switch(instrument) {
+    case 'piano':
+      instrumentOscillator.type = 'triangle';
+      break;
+    case 'guitar':
+      instrumentOscillator.type = 'sawtooth';
+      break;
+    case 'violin':
+      instrumentOscillator.type = 'sawtooth';
+      break;
+    case 'flute':
+      instrumentOscillator.type = 'sine';
+      break;
+    case 'trumpet':
+      instrumentOscillator.type = 'square';
+      break;
+    case 'cello':
+      instrumentOscillator.type = 'sawtooth';
+      break;
+    default:
+      instrumentOscillator.type = 'sine';
+  }
+  
+  instrumentOscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+  
+  // Set up gain (volume) with ADSR envelope (fade in and fade out)
+  instrumentGain.gain.setValueAtTime(0, audioContext.currentTime);
+  instrumentGain.gain.linearRampToValueAtTime(NOTE_PEAK_GAIN, audioContext.currentTime + NOTE_ATTACK_TIME);
+  instrumentGain.gain.linearRampToValueAtTime(NOTE_SUSTAIN_GAIN, audioContext.currentTime + NOTE_SUSTAIN_TIME);
+  instrumentGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + NOTE_DURATION);
+  
+  // Connect nodes
+  instrumentOscillator.connect(instrumentGain);
+  instrumentGain.connect(audioContext.destination);
+  
+  // Start and stop
+  instrumentOscillator.start(audioContext.currentTime);
+  instrumentOscillator.stop(audioContext.currentTime + NOTE_DURATION);
+  
+  // Update visualization parameters based on note frequency
+  // Map frequency to m and n for visualization using logarithmic scaling
+  // Use harmonic relationship for n (frequency * 1.5) to create pattern variations
+  const harmonicFrequency = frequency * 1.5; // Create harmonic for n parameter
+  m = mapFrequencyToRange(frequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
+  n = mapFrequencyToRange(harmonicFrequency, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY * 1.5, N_PARAM_MIN, N_PARAM_MAX);
+  m = constrain(m, M_PARAM_MIN, M_PARAM_MAX);
+  n = constrain(n, N_PARAM_MIN, N_PARAM_MAX);
+  
+  sliders.m.value(m);
+  sliders.n.value(n);
+  document.getElementById('mValue').textContent = m;
+  document.getElementById('nValue').textContent = n;
+  
+  instrumentOscillator.onended = () => {
+    instrumentOscillator = null;
+    instrumentGain = null;
+  };
 }
 
 const drawHeatmap = () => {

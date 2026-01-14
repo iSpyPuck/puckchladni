@@ -64,6 +64,42 @@ button:hover {
 #audioControls {
 	margin-top: 10px;
 }
+#audioSeekbar {
+	margin: 10px 0;
+}
+#seekSlider {
+	width: 100%;
+	cursor: pointer;
+}
+#frameDisplay {
+	margin-top: 5px;
+	font-size: 12px;
+	color: rgba(255,255,255,0.8);
+}
+select {
+	margin: 5px 0;
+	padding: 5px;
+	background-color: rgba(255,255,255,0.1);
+	color: white;
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 3px;
+	font-family: monospace;
+	font-size: 12px;
+	min-width: 200px;
+}
+select:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+#mValue, #nValue {
+	margin-left: 10px;
+	font-size: 12px;
+	color: rgba(255,255,255,0.8);
+}
 
 canvas {
 	position: absolute;

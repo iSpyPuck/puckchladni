@@ -660,7 +660,7 @@ const playInstrumentNote = () => {
   // Perform FFT analysis after a short delay to capture the sound
   setTimeout(() => {
     analyzeInstrumentSpectrum(instrument);
-  }, 200); // Wait 200ms for sound to develop
+  }, 500); // Wait 500ms for sound to develop and harmonics to establish
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
@@ -760,8 +760,8 @@ const analyzeInstrumentSpectrum = (instrument) => {
   
   // Update sliders and displays
   // Handle both p5.js sliders and vanilla JS fallback
-  const mSlider = sliders.m?.elt || document.getElementById('mSlider');
-  const nSlider = sliders.n?.elt || document.getElementById('nSlider');
+  const mSlider = sliders?.m?.elt || document.getElementById('mSlider');
+  const nSlider = sliders?.n?.elt || document.getElementById('nSlider');
   
   if (mSlider) mSlider.value = m;
   if (nSlider) nSlider.value = n;

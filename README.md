@@ -1,6 +1,6 @@
 A small physics demonstration using p5.js.
 
-https://addiebarron.github.io/chladni
+[https://addiebarron.github.io/chladni](https://ispypuck.github.io/puckchladni/)
 
 **Chladni patterns** form when a speaker playing a set frequency is placed underneath a square plate covered with sand. You can see an example [here](https://www.youtube.com/watch?v=tFAcYruShow).
 

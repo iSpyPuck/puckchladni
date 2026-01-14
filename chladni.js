@@ -32,6 +32,11 @@ const N_PARAM_MAX = 50; // Maximum value for n parameter
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
 
+// Musical interval constants
+const PERFECT_FOURTH_INTERVAL = 4/3; // Perfect fourth frequency ratio
+const PERFECT_FIFTH_INTERVAL = 1.5; // Perfect fifth frequency ratio
+const OCTAVE_INTERVAL = 2.0; // Octave frequency ratio
+
 // Note frequencies mapping
 const noteFrequencies = {
   'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61,
@@ -418,14 +423,14 @@ const playInstrumentNote = () => {
     case 'piano':
       waveform = 'triangle';
       harmonicMultiplierM = 1.0;  // Pure fundamental
-      harmonicMultiplierN = 1.5;  // Perfect fifth harmonic
+      harmonicMultiplierN = PERFECT_FIFTH_INTERVAL;  // Perfect fifth harmonic
       offsetM = 0;
       offsetN = 1;
       break;
     case 'guitar':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = 2.0;  // Octave harmonic
+      harmonicMultiplierN = OCTAVE_INTERVAL;  // Octave harmonic
       offsetM = 1;
       offsetN = 0;
       break;
@@ -453,14 +458,14 @@ const playInstrumentNote = () => {
     case 'cello':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = 4/3;  // Perfect fourth interval
+      harmonicMultiplierN = PERFECT_FOURTH_INTERVAL;  // Perfect fourth interval
       offsetM = 0;
       offsetN = -1;
       break;
     default:
       waveform = 'sine';
       harmonicMultiplierM = 1.0;
-      harmonicMultiplierN = 1.5;
+      harmonicMultiplierN = PERFECT_FIFTH_INTERVAL;
       offsetM = 0;
       offsetN = 0;
   }

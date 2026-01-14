@@ -29,6 +29,8 @@ const M_PARAM_MIN = 1; // Minimum value for m parameter
 const M_PARAM_MAX = 50; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
 const N_PARAM_MAX = 50; // Maximum value for n parameter
+const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
+const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
 
 // Note frequencies mapping
 const noteFrequencies = {
@@ -430,7 +432,7 @@ const playInstrumentNote = () => {
     case 'violin':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.05; // Slightly sharp fundamental (violin characteristic)
-      harmonicMultiplierN = 3.0;  // Twelfth harmonic (octave + fifth)
+      harmonicMultiplierN = 3.0;  // Triple frequency (octave + fifth interval)
       offsetM = 0;
       offsetN = 2;
       break;
@@ -451,7 +453,7 @@ const playInstrumentNote = () => {
     case 'cello':
       waveform = 'sawtooth';
       harmonicMultiplierM = 1.0;  // Fundamental
-      harmonicMultiplierN = 1.33; // Perfect fourth interval
+      harmonicMultiplierN = 4/3;  // Perfect fourth interval
       offsetM = 0;
       offsetN = -1;
       break;
@@ -486,10 +488,9 @@ const playInstrumentNote = () => {
   const frequencyM = frequency * harmonicMultiplierM;
   const frequencyN = frequency * harmonicMultiplierN;
   
-  // Calculate proper mapping ranges that account for harmonic multipliers
-  // Max multipliers: 1.05 for M, 3.0 for N
-  const maxFrequencyM = MAX_NOTE_FREQUENCY * 1.05;
-  const maxFrequencyN = MAX_NOTE_FREQUENCY * 3.0;
+  // Calculate proper mapping ranges that account for maximum harmonic multipliers
+  const maxFrequencyM = MAX_NOTE_FREQUENCY * MAX_HARMONIC_MULTIPLIER_M;
+  const maxFrequencyN = MAX_NOTE_FREQUENCY * MAX_HARMONIC_MULTIPLIER_N;
   
   m = mapFrequencyToRange(frequencyM, MIN_NOTE_FREQUENCY, maxFrequencyM, M_PARAM_MIN, M_PARAM_MAX) + offsetM;
   n = mapFrequencyToRange(frequencyN, MIN_NOTE_FREQUENCY, maxFrequencyN, N_PARAM_MIN, N_PARAM_MAX) + offsetN;

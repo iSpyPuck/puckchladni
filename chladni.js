@@ -29,6 +29,8 @@ const M_PARAM_MIN = 1; // Minimum value for m parameter
 const M_PARAM_MAX = 18; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
 const N_PARAM_MAX = 18; // Maximum value for n parameter
+const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to create variation from m
+const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
 
@@ -270,6 +272,25 @@ const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) =>
   return Math.floor(mapped);
 };
 
+// Helper function to map frequency to parameter with offset and clamping
+const mapFrequencyToParameter = (frequency, frequencyOffset, minFreq, maxFreq, minParam, maxParam) => {
+  const mapped = mapFrequencyToRange(frequency + frequencyOffset, minFreq, maxFreq, minParam, maxParam);
+  return Math.max(minParam, Math.min(maxParam, mapped));
+};
+
+// Helper function to update m and n sliders and displays
+// Handles both p5.js sliders and vanilla JS fallback
+const updateParameterSliders = (mValue, nValue) => {
+  const mSlider = sliders?.m?.elt || document.getElementById('mSlider');
+  const nSlider = sliders?.n?.elt || document.getElementById('nSlider');
+  
+  if (mSlider) mSlider.value = mValue;
+  if (nSlider) nSlider.value = nValue;
+  
+  document.getElementById('mValue').textContent = mValue;
+  document.getElementById('nValue').textContent = nValue;
+};
+
 const handleAudioUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -418,12 +439,7 @@ const updateAudioVisualization = () => {
   }
 
   // update slider displays to reflect audio-driven values
-  sliders.m.value(m);
-  sliders.n.value(n);
-  
-  // Update value displays
-  document.getElementById('mValue').textContent = m;
-  document.getElementById('nValue').textContent = n;
+  updateParameterSliders(m, n);
 }
 
 const playInstrumentNote = () => {
@@ -436,6 +452,17 @@ const playInstrumentNote = () => {
   if (!instrument || !note) return;
   
   const frequency = noteFrequencies[note];
+  
+  // Map frequency to m and n parameters for unique Chladni patterns per note
+  // Use logarithmic scaling similar to updateAudioVisualization()
+  m = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
+  
+  // Offset n parameter mapping slightly to create variation between m and n
+  // This ensures visually distinct patterns for each note
+  n = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
+  
+  // Update slider values and displays
+  updateParameterSliders(m, n);
   
   // Initialize audio context if needed
   if (!audioContext) {
@@ -701,10 +728,9 @@ const playInstrumentNote = () => {
     osc.stop(audioContext.currentTime + NOTE_DURATION);
   }
   
-  // Perform FFT analysis after a short delay to capture the sound
-  setTimeout(() => {
-    analyzeInstrumentSpectrum(instrument);
-  }, 500); // Wait 500ms for sound to develop and harmonics to establish
+  // Note: analyzeInstrumentSpectrum() has been disabled to preserve frequency-based m/n mapping
+  // Each note now produces a unique Chladni pattern based on its frequency
+  // rather than the instrument's spectral characteristics
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
@@ -804,15 +830,7 @@ if (instrument === 'piano') {
   n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   
   // Update sliders and displays
-  // Handle both p5.js sliders and vanilla JS fallback
-  const mSlider = sliders?.m?.elt || document.getElementById('mSlider');
-  const nSlider = sliders?.n?.elt || document.getElementById('nSlider');
-  
-  if (mSlider) mSlider.value = m;
-  if (nSlider) nSlider.value = n;
-  
-  document.getElementById('mValue').textContent = m;
-  document.getElementById('nValue').textContent = n;
+  updateParameterSliders(m, n);
 }
 
 const drawHeatmap = () => {

@@ -30,6 +30,7 @@ const M_PARAM_MAX = 18; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
 const N_PARAM_MAX = 18; // Maximum value for n parameter
 const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to create variation from m
+const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
 
@@ -271,6 +272,12 @@ const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) =>
   return Math.floor(mapped);
 };
 
+// Helper function to map frequency to parameter with offset and clamping
+const mapFrequencyToParameter = (frequency, frequencyOffset, minFreq, maxFreq, minParam, maxParam) => {
+  const mapped = mapFrequencyToRange(frequency + frequencyOffset, minFreq, maxFreq, minParam, maxParam);
+  return Math.max(minParam, Math.min(maxParam, mapped));
+};
+
 // Helper function to update m and n sliders and displays
 // Handles both p5.js sliders and vanilla JS fallback
 const updateParameterSliders = (mValue, nValue) => {
@@ -448,14 +455,11 @@ const playInstrumentNote = () => {
   
   // Map frequency to m and n parameters for unique Chladni patterns per note
   // Use logarithmic scaling similar to updateAudioVisualization()
-  m = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
-  m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
+  m = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
   
   // Offset n parameter mapping slightly to create variation between m and n
   // This ensures visually distinct patterns for each note
-  const nOffset = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR;
-  n = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET + nOffset, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
-  n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
+  n = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
   
   // Update slider values and displays
   updateParameterSliders(m, n);

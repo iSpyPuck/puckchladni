@@ -437,6 +437,28 @@ const playInstrumentNote = () => {
   
   const frequency = noteFrequencies[note];
   
+  // Map frequency to m and n parameters for unique Chladni patterns per note
+  // Use logarithmic scaling similar to updateAudioVisualization()
+  m = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
+  m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
+  
+  // Offset n parameter mapping slightly to create variation between m and n
+  // This ensures visually distinct patterns for each note
+  const nOffset = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * 0.15;
+  n = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET + nOffset, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
+  n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
+  
+  // Update slider values and displays
+  // Handle both p5.js sliders and vanilla JS fallback
+  const mSlider = sliders?.m?.elt || document.getElementById('mSlider');
+  const nSlider = sliders?.n?.elt || document.getElementById('nSlider');
+  
+  if (mSlider) mSlider.value = m;
+  if (nSlider) nSlider.value = n;
+  
+  document.getElementById('mValue').textContent = m;
+  document.getElementById('nValue').textContent = n;
+  
   // Initialize audio context if needed
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -701,10 +723,9 @@ const playInstrumentNote = () => {
     osc.stop(audioContext.currentTime + NOTE_DURATION);
   }
   
-  // Perform FFT analysis after a short delay to capture the sound
-  setTimeout(() => {
-    analyzeInstrumentSpectrum(instrument);
-  }, 500); // Wait 500ms for sound to develop and harmonics to establish
+  // Note: analyzeInstrumentSpectrum() has been disabled to preserve frequency-based m/n mapping
+  // Each note now produces a unique Chladni pattern based on its frequency
+  // rather than the instrument's spectral characteristics
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;

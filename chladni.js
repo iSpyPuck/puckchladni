@@ -36,22 +36,28 @@ const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (vio
 const FFT_CAPTURE_DELAY_MS = 100; // milliseconds to wait for FFT to capture harmonic content
 const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for fundamental (avoids harmonics)
 
-// Instrument-specific pitch sensitivity factors for m and n parameter variation
-// These control how much m and n change with note frequency for each instrument
-const PITCH_SENSITIVITY_PIANO_M = 0.15; // Piano m parameter pitch sensitivity
-const PITCH_SENSITIVITY_PIANO_N = 0.18; // Piano n parameter pitch sensitivity
-const PITCH_SENSITIVITY_GUITAR_M = 0.25; // Guitar m parameter pitch sensitivity
-const PITCH_SENSITIVITY_GUITAR_N = 0.22; // Guitar n parameter pitch sensitivity
-const PITCH_SENSITIVITY_VIOLIN_M = 0.20; // Violin m parameter pitch sensitivity
-const PITCH_SENSITIVITY_VIOLIN_N = 0.17; // Violin n parameter pitch sensitivity
-const PITCH_SENSITIVITY_FLUTE_M = 0.30; // Flute m parameter pitch sensitivity (highest)
-const PITCH_SENSITIVITY_FLUTE_N = 0.28; // Flute n parameter pitch sensitivity (highest)
-const PITCH_SENSITIVITY_TRUMPET_M = 0.12; // Trumpet m parameter pitch sensitivity (lowest)
-const PITCH_SENSITIVITY_TRUMPET_N = 0.15; // Trumpet n parameter pitch sensitivity (lowest)
-const PITCH_SENSITIVITY_CELLO_M = 0.23; // Cello m parameter pitch sensitivity
-const PITCH_SENSITIVITY_CELLO_N = 0.20; // Cello n parameter pitch sensitivity
-const PITCH_SENSITIVITY_DEFAULT_M = 0.20; // Default m parameter pitch sensitivity
-const PITCH_SENSITIVITY_DEFAULT_N = 0.20; // Default n parameter pitch sensitivity
+// Physics constants for Chladni plate resonance
+// f_mn = (c/2L) × √(m² + n²)
+// where c is wave speed in plate (m/s) and L is plate length (m)
+// Calibrated so that musical frequencies (130-523 Hz) map to reasonable m,n values (1-18)
+const PLATE_LENGTH = 0.5; // meters - typical square plate size
+const WAVE_SPEED = 31.0; // m/s - calibrated for musical frequency range
+const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 31 Hz
+const PHYSICS_TOLERANCE_FACTOR = 1.5; // Tolerance multiplier for finding valid (m,n) pairs
+const PHYSICS_FALLBACK_PAIRS = 5; // Number of closest (m,n) pairs to consider when no exact match
+
+// Instrument differentiation via pattern selection weights
+// When multiple (m,n) pairs satisfy a frequency, these weights determine preference
+// Higher values favor higher m or n (more complex patterns)
+const INSTRUMENT_WEIGHTS = {
+  'piano': { m_preference: 0.55, n_preference: 0.55 },    // Balanced, moderate complexity
+  'guitar': { m_preference: 0.35, n_preference: 0.65 },   // Prefers higher n (vertical modes)
+  'violin': { m_preference: 0.45, n_preference: 0.75 },   // Strong n-dominant
+  'flute': { m_preference: 0.25, n_preference: 0.25 },    // Simplest patterns (low m,n)
+  'trumpet': { m_preference: 0.75, n_preference: 0.45 },  // Strong m-dominant (horizontal modes)
+  'cello': { m_preference: 0.65, n_preference: 0.35 },    // m-dominant, moderate
+  'default': { m_preference: 0.5, n_preference: 0.5 }     // Neutral
+};
 
 // Musical interval constants
 const PERFECT_FOURTH_INTERVAL = 4/3; // Perfect fourth frequency ratio
@@ -841,82 +847,101 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     bandEnergies[bandName] = totalEnergy > 0 ? bandEnergies[bandName] / totalEnergy : 0;
   }
   
-  // Weight vibrational modes based on spectral energy distribution
-  // m and n parameters control the Chladni pattern complexity
+  // Physics-based calculation of m and n from frequency
+  // Using the Chladni plate resonance formula: f_mn = (c/2L) × √(m² + n²)
+  // Solving for m² + n²: m² + n² = (f / PHYSICS_CONSTANT)²
   
-  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+  const targetSum = Math.pow(frequency / PHYSICS_CONSTANT, 2);
   
-  // Calculate frequency-based factor for note variation
-  // Higher notes -> higher m and n values (more complex patterns)
-  // Lower notes -> lower m and n values (simpler patterns)
-  // Map frequency from MIN_NOTE_FREQUENCY to MAX_NOTE_FREQUENCY onto 0..1
-  const freqFactor = (frequency - MIN_NOTE_FREQUENCY) / (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY);
-  const clampedFreqFactor = clamp01(freqFactor);
+  // Find all valid (m, n) pairs that satisfy the frequency equation
+  const validPairs = [];
   
-  // Map instrument spectral characteristics to Chladni pattern parameters
-  // Each instrument has unique harmonic profiles that translate to different patterns
-  // Now also varying by note frequency for realistic physical behavior
-  let w; // instrument weight, 0..1
-  let baseM, baseN; // base values before frequency adjustment
-  
-  if (instrument === 'piano') {
-    w = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
-    // Piano has strong high-order harmonics - creates complex patterns
-    // Base pattern varies with instrument characteristic weight
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w);
-    // Apply frequency-based variation: higher notes increase both m and n
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_PIANO_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_PIANO_N);
-  } else if (instrument === 'guitar') {
-    w = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
-    // Guitar emphasizes fundamental and low harmonics - simpler patterns
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w);
-    // Apply frequency-based variation: higher notes increase complexity
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_GUITAR_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_GUITAR_N);
-  } else if (instrument === 'violin') {
-    w = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
-    // Violin has rich mid-high harmonic content - moderate complexity
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w);
-    // Apply frequency-based variation: violin patterns vary strongly with pitch
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_VIOLIN_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_VIOLIN_N);
-  } else if (instrument === 'flute') {
-    w = clamp01(bandEnergies.fundamental);
-    // Flute is mostly pure tone - simplest patterns
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w);
-    // Apply frequency-based variation: flute shows moderate pitch-dependent patterns
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_FLUTE_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_FLUTE_N);
-  } else if (instrument === 'trumpet') {
-    w = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
-    // Trumpet has bright, strong high harmonics - complex patterns
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w);
-    // Apply frequency-based variation: trumpet patterns less sensitive to pitch
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_TRUMPET_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_TRUMPET_N);
-  } else if (instrument === 'cello') {
-    w = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
-    // Cello has warm, balanced harmonics - moderate patterns
-    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w);
-    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w);
-    // Apply frequency-based variation: cello shows significant pitch variation
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_CELLO_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_CELLO_N);
-  } else {
-    // Default: middle range with frequency variation
-    baseM = (M_PARAM_MIN + M_PARAM_MAX) / 2;
-    baseN = (N_PARAM_MIN + N_PARAM_MAX) / 2;
-    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * PITCH_SENSITIVITY_DEFAULT_M);
-    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * PITCH_SENSITIVITY_DEFAULT_N);
+  for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+    for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+      const sum = testM * testM + testN * testN;
+      // Generous tolerance to allow multiple solutions for instrument differentiation
+      const tolerance = PHYSICS_TOLERANCE_FACTOR * (testM + testN);
+      if (Math.abs(sum - targetSum) <= tolerance) {
+        validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
+      }
+    }
   }
   
-  // Constrain to valid ranges using helper function
+  // If no matches found, find several closest matches
+  if (validPairs.length === 0) {
+    const allPairs = [];
+    for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+      for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+        const sum = testM * testM + testN * testN;
+        const diff = Math.abs(sum - targetSum);
+        allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
+      }
+    }
+    // Sort by accuracy and take top PHYSICS_FALLBACK_PAIRS
+    allPairs.sort((a, b) => a.diff - b.diff);
+    validPairs.push(...allPairs.slice(0, PHYSICS_FALLBACK_PAIRS));
+  }
+  
+  // Get instrument-specific preference weights
+  const weights = INSTRUMENT_WEIGHTS[instrument] || INSTRUMENT_WEIGHTS['default'];
+  
+  // Use harmonic content to influence selection among valid pairs
+  // Instruments with more high harmonics prefer higher m+n values
+  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+  
+  let harmonicWeight = 0;
+  if (instrument === 'piano') {
+    harmonicWeight = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
+  } else if (instrument === 'guitar') {
+    harmonicWeight = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
+  } else if (instrument === 'violin') {
+    harmonicWeight = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
+  } else if (instrument === 'flute') {
+    harmonicWeight = clamp01(bandEnergies.fundamental);
+  } else if (instrument === 'trumpet') {
+    harmonicWeight = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
+  } else if (instrument === 'cello') {
+    harmonicWeight = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
+  } else {
+    harmonicWeight = 0.5; // Default neutral weight
+  }
+  
+  // Select best (m,n) pair based on instrument preferences and harmonic content
+  // Score each pair: prefer pairs that match instrument's m/n preferences
+  // and are weighted by the harmonic content
+  let bestPair = validPairs[0];
+  let bestScore = -Infinity;
+  
+  for (let pair of validPairs) {
+    // Normalize m and n to 0-1 range
+    const mNorm = (pair.m - M_PARAM_MIN) / (M_PARAM_MAX - M_PARAM_MIN);
+    const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
+    
+    // Calculate m/n ratio preference for this instrument
+    const mTarget = weights.m_preference * (0.5 + 0.5 * harmonicWeight);
+    const nTarget = weights.n_preference * (0.5 + 0.5 * harmonicWeight);
+    
+    // Score based on how close normalized m,n are to instrument preferences
+    const mScore = 1 - Math.abs(mNorm - mTarget);
+    const nScore = 1 - Math.abs(nNorm - nTarget);
+    
+    // Physics accuracy score - normalized so very close matches aren't overly dominant
+    const accuracyScore = 1 / (1 + pair.diff / (targetSum + 1));
+    
+    // Combined score: balance physics (2x weight) with instrument preference (3x weight each)
+    // This allows more instrument differentiation while still respecting physics
+    const totalScore = accuracyScore * 2 + mScore * 3 + nScore * 3;
+    
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestPair = pair;
+    }
+  }
+  
+  m = bestPair.m;
+  n = bestPair.n;
+  
+  // Constrain to valid ranges using helper function (should already be valid)
   const clamped = clampChladniParameters(m, n);
   m = clamped.m;
   n = clamped.n;

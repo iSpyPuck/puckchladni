@@ -737,7 +737,7 @@ const playInstrumentNote = () => {
   // Note: A fixed delay is used as Web Audio API doesn't provide a direct event
   // for when FFT data is ready. This delay provides reliable capture across devices.
   setTimeout(() => {
-    analyzeInstrumentSpectrum(instrument);
+    analyzeInstrumentSpectrum(instrument, note, frequency);
   }, FFT_CAPTURE_DELAY_MS);
   
   instrumentOscillator.onended = () => {
@@ -750,7 +750,7 @@ const playInstrumentNote = () => {
 }
 
 // Analyze the frequency spectrum and weight vibrational modes accordingly
-const analyzeInstrumentSpectrum = (instrument) => {
+const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   if (!analyser || !audioContext) {
     console.warn('Audio context or analyser not initialized');
     return;
@@ -824,6 +824,13 @@ const analyzeInstrumentSpectrum = (instrument) => {
     bandEnergies[bandName] = totalEnergy > 0 ? bandEnergies[bandName] / totalEnergy : 0;
   }
   
+  // Calculate frequency-based factor for note variation
+  // Higher notes -> higher m and n values (more complex patterns)
+  // Lower notes -> lower m and n values (simpler patterns)
+  // Map frequency from MIN_NOTE_FREQUENCY to MAX_NOTE_FREQUENCY onto 0..1
+  const freqFactor = (frequency - MIN_NOTE_FREQUENCY) / (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY);
+  const clampedFreqFactor = Math.max(0, Math.min(1, freqFactor));
+  
   // Weight vibrational modes based on spectral energy distribution
   // m and n parameters control the Chladni pattern complexity
   
@@ -831,41 +838,65 @@ const analyzeInstrumentSpectrum = (instrument) => {
   
   // Map instrument spectral characteristics to Chladni pattern parameters
   // Each instrument has unique harmonic profiles that translate to different patterns
+  // Now also varying by note frequency for realistic physical behavior
   let w; // instrument weight, 0..1
+  let baseM, baseN; // base values before frequency adjustment
+  
   if (instrument === 'piano') {
     w = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
     // Piano has strong high-order harmonics - creates complex patterns
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w));
+    // Base pattern varies with instrument characteristic weight
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w);
+    // Apply frequency-based variation: higher notes increase both m and n
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.15);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.18);
   } else if (instrument === 'guitar') {
     w = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
     // Guitar emphasizes fundamental and low harmonics - simpler patterns
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w));
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w);
+    // Apply frequency-based variation: higher notes increase complexity
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.25);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.22);
   } else if (instrument === 'violin') {
     w = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
     // Violin has rich mid-high harmonic content - moderate complexity
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w));
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w);
+    // Apply frequency-based variation: violin patterns vary strongly with pitch
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.20);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.17);
   } else if (instrument === 'flute') {
     w = clamp01(bandEnergies.fundamental);
     // Flute is mostly pure tone - simplest patterns
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w));
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w);
+    // Apply frequency-based variation: flute shows moderate pitch-dependent patterns
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.30);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.28);
   } else if (instrument === 'trumpet') {
     w = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
     // Trumpet has bright, strong high harmonics - complex patterns
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w));
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w);
+    // Apply frequency-based variation: trumpet patterns less sensitive to pitch
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.12);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.15);
   } else if (instrument === 'cello') {
     w = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
     // Cello has warm, balanced harmonics - moderate patterns
-    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w));
-    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w));
+    baseM = M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w);
+    baseN = N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w);
+    // Apply frequency-based variation: cello shows significant pitch variation
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.23);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.20);
   } else {
-    // Default: middle range
-    m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
-    n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
+    // Default: middle range with frequency variation
+    baseM = (M_PARAM_MIN + M_PARAM_MAX) / 2;
+    baseN = (N_PARAM_MIN + N_PARAM_MAX) / 2;
+    m = Math.floor(baseM + (M_PARAM_MAX - baseM) * clampedFreqFactor * 0.20);
+    n = Math.floor(baseN + (N_PARAM_MAX - baseN) * clampedFreqFactor * 0.20);
   }
   
   // Constrain to valid ranges using helper function

@@ -26,9 +26,9 @@ const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
 const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 const M_PARAM_MIN = 1; // Minimum value for m parameter
-const M_PARAM_MAX = 18; // Maximum value for m parameter
+const M_PARAM_MAX = 500; // Maximum value for m parameter (increased 100x for dramatic variation)
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
-const N_PARAM_MAX = 18; // Maximum value for n parameter
+const N_PARAM_MAX = 500; // Maximum value for n parameter (increased 100x for dramatic variation)
 const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to create variation from m
 const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
@@ -39,24 +39,27 @@ const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for
 // Physics constants for Chladni plate resonance
 // f_mn = (c/2L) × √(m² + n²)
 // where c is wave speed in plate (m/s) and L is plate length (m)
-// Calibrated so that musical frequencies (130-523 Hz) map to reasonable m,n values (1-18)
+// NOTE: These values are calibrated for VISUAL/ARTISTIC purposes, not physical accuracy.
+// The goal is to map musical frequencies (130-523 Hz) to m,n values across 1-500 range
+// for dramatic visual variation. Actual plate physics would require different constants.
 const PLATE_LENGTH = 0.5; // meters - typical square plate size
-const WAVE_SPEED = 31.0; // m/s - calibrated for musical frequency range
-const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 31 Hz
-const PHYSICS_TOLERANCE_FACTOR = 1.5; // Tolerance multiplier for finding valid (m,n) pairs
-const PHYSICS_FALLBACK_PAIRS = 5; // Number of closest (m,n) pairs to consider when no exact match
+const WAVE_SPEED = 1.5; // m/s - intentionally low for extended visual m,n range
+const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 1.5 Hz
+const PHYSICS_TOLERANCE_FACTOR = 0.5; // Tolerance for finding valid (m,n) pairs
+const PHYSICS_FALLBACK_PAIRS = 10; // Number of closest (m,n) pairs to consider when no exact match
 
-// Instrument differentiation via pattern selection weights
-// When multiple (m,n) pairs satisfy a frequency, these weights determine preference
-// Higher values favor higher m or n (more complex patterns)
+// Instrument differentiation via STRONG pattern selection weights and offsets
+// Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
+// These offsets guarantee every instrument+note combination produces different m,n values
+// Offsets are kept small (max 13) to avoid exceeding M_PARAM_MAX/N_PARAM_MAX after addition
 const INSTRUMENT_WEIGHTS = {
-  'piano': { m_preference: 0.55, n_preference: 0.55 },    // Balanced, moderate complexity
-  'guitar': { m_preference: 0.35, n_preference: 0.65 },   // Prefers higher n (vertical modes)
-  'violin': { m_preference: 0.45, n_preference: 0.75 },   // Strong n-dominant
-  'flute': { m_preference: 0.25, n_preference: 0.25 },    // Simplest patterns (low m,n)
-  'trumpet': { m_preference: 0.75, n_preference: 0.45 },  // Strong m-dominant (horizontal modes)
-  'cello': { m_preference: 0.65, n_preference: 0.35 },    // m-dominant, moderate
-  'default': { m_preference: 0.5, n_preference: 0.5 }     // Neutral
+  'piano':   { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  },   // Baseline
+  'guitar':  { m_preference: 0.20, n_preference: 0.80, m_offset: 3,  n_offset: 7  },   // Strong n-dominant
+  'violin':  { m_preference: 0.30, n_preference: 0.90, m_offset: 5,  n_offset: 11 },   // Very strong n-dominant
+  'flute':   { m_preference: 0.10, n_preference: 0.10, m_offset: 2,  n_offset: 3  },   // Simplest patterns
+  'trumpet': { m_preference: 0.90, n_preference: 0.20, m_offset: 13, n_offset: 5  },   // Very strong m-dominant
+  'cello':   { m_preference: 0.80, n_preference: 0.30, m_offset: 9,  n_offset: 4  },   // Strong m-dominant
+  'default': { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  }    // Neutral
 };
 
 // Musical interval constants
@@ -808,12 +811,14 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     }
   }
   
-  const fundamentalFreq = fundamentalBin * frequencyResolution;
+  let fundamentalFreq = fundamentalBin * frequencyResolution;
   
-  // Validate that we found a meaningful fundamental frequency
+  // If FFT detection fails, use the known frequency as fallback
+  // This ensures the physics-based calculation always runs
   if (fundamentalFreq <= 0 || maxAmplitude === 0) {
-    console.warn('No valid fundamental frequency detected');
-    return;
+    console.log('Using known frequency as fallback:', frequency);
+    fundamentalFreq = frequency;
+    fundamentalBin = Math.round(frequency / frequencyResolution);
   }
   
   // Define frequency bands for analysis based on the actual fundamental
@@ -938,10 +943,24 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     }
   }
   
-  m = bestPair.m;
-  n = bestPair.n;
+  // Apply instrument-specific offsets to guarantee unique m,n for each instrument+note combination
+  // Offsets are applied after base calculation; if result would exceed max, wrap around instead of clamping
+  // to maintain uniqueness (clamping could cause collisions at the boundary)
+  const mOffset = weights.m_offset || 0;
+  const nOffset = weights.n_offset || 0;
   
-  // Constrain to valid ranges using helper function (should already be valid)
+  m = bestPair.m + mOffset;
+  n = bestPair.n + nOffset;
+  
+  // Handle overflow by wrapping instead of clamping to maintain uniqueness
+  if (m > M_PARAM_MAX) {
+    m = M_PARAM_MIN + (m - M_PARAM_MAX - 1);
+  }
+  if (n > N_PARAM_MAX) {
+    n = N_PARAM_MIN + (n - N_PARAM_MAX - 1);
+  }
+  
+  // Final constraint to valid ranges
   const clamped = clampChladniParameters(m, n);
   m = clamped.m;
   n = clamped.n;

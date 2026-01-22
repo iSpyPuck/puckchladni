@@ -347,11 +347,100 @@ const clampChladniParameters = (mValue, nValue) => {
   return { m: clampedM, n: clampedN };
 };
 
+// Function to create a deterministic hash from frequency for uniqueness
+const hashFrequency = (frequency) => {
+  // Use the decimal part of the frequency to create variation
+  // Multiply by large prime numbers to spread values across the range
+  const intPart = Math.floor(frequency);
+  const decimalPart = frequency - intPart;
+  
+  // Create hash components using prime number multiplication
+  const hash1 = (intPart * 17 + decimalPart * 997) % 17.3;
+  const hash2 = (intPart * 31 + decimalPart * 1009) % 17.7;
+  
+  return { hash1, hash2 };
+};
+
 // Function to apply a specific frequency to m and n parameters
 const applySpecificFrequency = (frequency) => {
-  // Map the frequency to m and n values using logarithmic scaling
-  const mValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-  const nValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
+  // Use physics-based calculation similar to instrument notes
+  const targetSum = Math.pow(frequency / PHYSICS_CONSTANT, 2);
+  
+  // Find valid (m, n) pairs that satisfy the frequency equation
+  const validPairs = [];
+  
+  for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+    for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+      const sum = testM * testM + testN * testN;
+      const tolerance = PHYSICS_TOLERANCE_FACTOR * (testM + testN);
+      if (Math.abs(sum - targetSum) <= tolerance) {
+        validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
+      }
+    }
+  }
+  
+  // If no matches found, find closest matches
+  if (validPairs.length === 0) {
+    const allPairs = [];
+    for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+      for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+        const sum = testM * testM + testN * testN;
+        const diff = Math.abs(sum - targetSum);
+        allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
+      }
+    }
+    allPairs.sort((a, b) => a.diff - b.diff);
+    validPairs.push(...allPairs.slice(0, PHYSICS_FALLBACK_PAIRS));
+  }
+  
+  // Create frequency-based hash for uniqueness
+  const freqHash = hashFrequency(frequency);
+  
+  // Select best pair using frequency hash as selection criterion
+  // This ensures each unique frequency gets a unique pattern
+  let bestPair = validPairs[0];
+  let bestScore = -Infinity;
+  
+  for (let pair of validPairs) {
+    // Normalize m and n to 0-1 range
+    const mNorm = (pair.m - M_PARAM_MIN) / (M_PARAM_MAX - M_PARAM_MIN);
+    const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
+    
+    // Use hash to determine target preferences (varies with frequency)
+    const mTarget = (freqHash.hash1 / 17.3);
+    const nTarget = (freqHash.hash2 / 17.7);
+    
+    // Score based on how close normalized m,n are to hash-based targets
+    const mScore = 1 - Math.abs(mNorm - mTarget);
+    const nScore = 1 - Math.abs(nNorm - nTarget);
+    
+    // Physics accuracy score
+    const accuracyScore = 1 / (1 + pair.diff / (targetSum + 1));
+    
+    // Combined score: physics (2x) + hash-based uniqueness (3x each)
+    const totalScore = accuracyScore * 2 + mScore * 3 + nScore * 3;
+    
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestPair = pair;
+    }
+  }
+  
+  // Apply frequency-based offsets for additional uniqueness
+  // Use hash values scaled to create small but distinct offsets
+  const mOffset = Math.floor(freqHash.hash1);
+  const nOffset = Math.floor(freqHash.hash2);
+  
+  let mValue = bestPair.m + mOffset;
+  let nValue = bestPair.n + nOffset;
+  
+  // Handle overflow by wrapping
+  if (mValue > M_PARAM_MAX) {
+    mValue = M_PARAM_MIN + (mValue - M_PARAM_MAX - 1);
+  }
+  if (nValue > N_PARAM_MAX) {
+    nValue = N_PARAM_MIN + (nValue - N_PARAM_MAX - 1);
+  }
   
   // Clamp values to valid ranges
   const clamped = clampChladniParameters(mValue, nValue);
@@ -987,8 +1076,22 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   const mOffset = weights.m_offset || 0;
   const nOffset = weights.n_offset || 0;
   
-  m = bestPair.m + mOffset;
-  n = bestPair.n + nOffset;
+  // Add note-specific variation to ensure each note produces a unique pattern
+  // Extract note name (e.g., "C3" -> C=67, 3=51 in ASCII)
+  let noteHash = 0;
+  if (note) {
+    for (let i = 0; i < note.length; i++) {
+      noteHash += note.charCodeAt(i);
+    }
+    // Use hash to create small, unique offsets (0-2 range for m and n)
+    noteHash = noteHash % 37; // Prime modulo for better distribution
+  }
+  
+  const noteOffsetM = Math.floor(noteHash / 7) % 3; // 0, 1, or 2
+  const noteOffsetN = (noteHash % 7) % 3; // 0, 1, or 2
+  
+  m = bestPair.m + mOffset + noteOffsetM;
+  n = bestPair.n + nOffset + noteOffsetN;
   
   // Handle overflow by wrapping instead of clamping to maintain uniqueness
   if (m > M_PARAM_MAX) {

@@ -36,6 +36,42 @@
 	</svg>
 </button>
 
+<!-- Grid Screenshot button -->
+<button id="gridScreenshotBtn" class="grid-screenshot-btn" aria-label="Generate pattern grid screenshot">
+	<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+		<rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+		<rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+		<rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+		<rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+	</svg>
+</button>
+
+<!-- Grid Screenshot Modal -->
+<div id="gridModal" class="grid-modal" role="dialog" aria-labelledby="gridModalTitle" aria-hidden="true">
+	<div class="grid-modal-content">
+		<div class="grid-modal-header">
+			<h2 id="gridModalTitle">Pattern Grid</h2>
+			<button id="closeGridModalBtn" class="close-modal-btn" aria-label="Close modal">&times;</button>
+		</div>
+		<div class="grid-modal-controls">
+			<label for="gridInstrumentSelect">Instrument:</label>
+			<select id="gridInstrumentSelect">
+				<option value="piano">Piano</option>
+				<option value="guitar">Guitar</option>
+				<option value="violin">Violin</option>
+				<option value="flute">Flute</option>
+				<option value="trumpet">Trumpet</option>
+				<option value="cello">Cello</option>
+			</select>
+			<button id="generateGridBtn" type="button">Generate Grid</button>
+			<button id="copyGridBtn" type="button">Copy to Clipboard</button>
+		</div>
+		<div id="gridContainer" class="grid-container">
+			<p class="grid-placeholder">Select an instrument and click "Generate Grid" to create patterns for C3, D3, E3, F3, and G3.</p>
+		</div>
+	</div>
+</div>
+
 <!-- Notification element -->
 <div id="notification" class="notification" role="alert" aria-live="polite"></div>
 

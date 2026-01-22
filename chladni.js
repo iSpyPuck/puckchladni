@@ -751,7 +751,10 @@ const playInstrumentNote = () => {
 
 // Analyze the frequency spectrum and weight vibrational modes accordingly
 const analyzeInstrumentSpectrum = (instrument) => {
-  if (!analyser) return;
+  if (!analyser || !audioContext) {
+    console.warn('Audio context or analyser not initialized');
+    return;
+  }
   
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
@@ -760,6 +763,12 @@ const analyzeInstrumentSpectrum = (instrument) => {
   // Get audio context sample rate to calculate exact frequency
   const sampleRate = audioContext.sampleRate;
   const frequencyResolution = sampleRate / analyser.fftSize;
+  
+  // Validate frequency resolution
+  if (frequencyResolution <= 0) {
+    console.warn('Invalid frequency resolution:', frequencyResolution);
+    return;
+  }
   
   // Find the dominant frequency (fundamental) dynamically from the spectrum
   // Limit search to lower frequencies to avoid mistaking harmonics for the fundamental
@@ -777,6 +786,12 @@ const analyzeInstrumentSpectrum = (instrument) => {
   }
   
   const fundamentalFreq = fundamentalBin * frequencyResolution;
+  
+  // Validate that we found a meaningful fundamental frequency
+  if (fundamentalFreq <= 0 || maxAmplitude === 0) {
+    console.warn('No valid fundamental frequency detected');
+    return;
+  }
   
   // Define frequency bands for analysis based on the actual fundamental
   const bands = [

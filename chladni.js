@@ -453,16 +453,8 @@ const playInstrumentNote = () => {
   
   const frequency = noteFrequencies[note];
   
-  // Map frequency to m and n parameters for unique Chladni patterns per note
-  // Use logarithmic scaling similar to updateAudioVisualization()
-  m = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, M_PARAM_MIN, M_PARAM_MAX);
-  
-  // Offset n parameter mapping slightly to create variation between m and n
-  // This ensures visually distinct patterns for each note
-  n = mapFrequencyToParameter(frequency, FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_NOTE_FREQUENCY, MAX_NOTE_FREQUENCY, N_PARAM_MIN, N_PARAM_MAX);
-  
-  // Update slider values and displays
-  updateParameterSliders(m, n);
+  // Note: m and n will be set by analyzeInstrumentSpectrum() after the oscillators start
+  // This allows the pattern to be based on the instrument's harmonic content rather than just frequency
   
   // Initialize audio context if needed
   if (!audioContext) {
@@ -728,9 +720,11 @@ const playInstrumentNote = () => {
     osc.stop(audioContext.currentTime + NOTE_DURATION);
   }
   
-  // Note: analyzeInstrumentSpectrum() has been disabled to preserve frequency-based m/n mapping
-  // Each note now produces a unique Chladni pattern based on its frequency
-  // rather than the instrument's spectral characteristics
+  // Allow time for the FFT to capture the harmonic content, then analyze
+  // the spectrum to set m and n parameters based on instrument characteristics
+  setTimeout(() => {
+    analyzeInstrumentSpectrum(instrument);
+  }, 100); // Wait 100ms for oscillators to stabilize and FFT to capture data
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
@@ -753,12 +747,20 @@ const analyzeInstrumentSpectrum = (instrument) => {
   const sampleRate = audioContext.sampleRate;
   const frequencyResolution = sampleRate / analyser.fftSize;
   
-  // Calculate spectral energy distribution
-  // Find energy in different frequency bands
-  const fundamentalFreq = noteFrequencies['C3'];
-  const fundamentalBin = Math.round(fundamentalFreq / frequencyResolution);
+  // Find the dominant frequency (fundamental) dynamically from the spectrum
+  let maxAmplitude = 0;
+  let fundamentalBin = 0;
   
-  // Define frequency bands for analysis
+  for (let i = 1; i < bufferLength; i++) {
+    if (dataArray[i] > maxAmplitude) {
+      maxAmplitude = dataArray[i];
+      fundamentalBin = i;
+    }
+  }
+  
+  const fundamentalFreq = fundamentalBin * frequencyResolution;
+  
+  // Define frequency bands for analysis based on the actual fundamental
   const bands = [
     { name: 'fundamental', startBin: Math.max(1, fundamentalBin - 2), endBin: fundamentalBin + 2 },
     { name: 'low_harmonics', startBin: fundamentalBin + 3, endBin: Math.round((fundamentalFreq * 3) / frequencyResolution) },
@@ -787,43 +789,46 @@ const analyzeInstrumentSpectrum = (instrument) => {
   // Weight vibrational modes based on spectral energy distribution
   // m and n parameters control the Chladni pattern complexity
   
-function clamp01(x) { return Math.max(0, Math.min(1, x)); }
-
-// Assume bandEnergies are already normalized fractions.
-// If not, normalize them before this block.
-
-let w; // instrument weight, 0..1
-if (instrument === 'piano') {
-  w = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
-  // Strong push upward
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w));
-} else if (instrument === 'guitar') {
-  w = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
-  // Keep it low
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w));
-} else if (instrument === 'violin') {
-  w = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w));
-} else if (instrument === 'flute') {
-  w = clamp01(bandEnergies.fundamental);
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w));
-} else if (instrument === 'trumpet') {
-  w = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w));
-} else if (instrument === 'cello') {
-  w = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
-  m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w));
-  n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w));
-} else {
-  m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
-  n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
-}
-
+  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+  
+  // Map instrument spectral characteristics to Chladni pattern parameters
+  // Each instrument has unique harmonic profiles that translate to different patterns
+  let w; // instrument weight, 0..1
+  if (instrument === 'piano') {
+    w = clamp01(bandEnergies.high_harmonics + 0.6 * bandEnergies.mid_harmonics);
+    // Piano has strong high-order harmonics - creates complex patterns
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.60 + 0.40 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.45 + 0.35 * w));
+  } else if (instrument === 'guitar') {
+    w = clamp01(bandEnergies.fundamental + 0.8 * bandEnergies.low_harmonics);
+    // Guitar emphasizes fundamental and low harmonics - simpler patterns
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.10 + 0.25 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.12 + 0.28 * w));
+  } else if (instrument === 'violin') {
+    w = clamp01(0.7 * bandEnergies.mid_harmonics + 0.4 * bandEnergies.high_harmonics);
+    // Violin has rich mid-high harmonic content - moderate complexity
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.40 + 0.35 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.25 * w));
+  } else if (instrument === 'flute') {
+    w = clamp01(bandEnergies.fundamental);
+    // Flute is mostly pure tone - simplest patterns
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.08 + 0.18 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.08 + 0.20 * w));
+  } else if (instrument === 'trumpet') {
+    w = clamp01(bandEnergies.high_harmonics + bandEnergies.mid_harmonics);
+    // Trumpet has bright, strong high harmonics - complex patterns
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.70 + 0.30 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.55 + 0.35 * w));
+  } else if (instrument === 'cello') {
+    w = clamp01(bandEnergies.low_harmonics + 0.7 * bandEnergies.mid_harmonics);
+    // Cello has warm, balanced harmonics - moderate patterns
+    m = Math.floor(M_PARAM_MIN + (M_PARAM_MAX - M_PARAM_MIN) * (0.25 + 0.35 * w));
+    n = Math.floor(N_PARAM_MIN + (N_PARAM_MAX - N_PARAM_MIN) * (0.30 + 0.30 * w));
+  } else {
+    // Default: middle range
+    m = Math.floor((M_PARAM_MIN + M_PARAM_MAX) / 2);
+    n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
+  }
   
   // Constrain to valid ranges
   m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));

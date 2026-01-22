@@ -58,7 +58,7 @@ const FREQ_HASH_PRIME_4 = 1009; // Fourth prime multiplier for decimal part
 const FREQ_HASH_MOD_2 = 17.7;  // Second modulo for hash distribution
 
 // Note-specific variation constants for instrument+note combinations
-// Updated to guarantee unique (m,n) values for all 90 instrument+note combinations
+// Updated to ensure unique (m,n) values for all 90 instrument+note combinations
 
 // Instrument index mapping for calculating unique offsets
 // Each instrument gets a unique index (0-5) used to create distinct patterns
@@ -121,10 +121,11 @@ const COMBINATION_OFFSETS = (() => {
   return offsets;
 })();
 
-// Instrument differentiation via STRONG pattern selection weights and offsets
-// Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
-// These offsets guarantee every instrument+note combination produces different m,n values
-// Offsets are kept small (max 13) to avoid exceeding M_PARAM_MAX/N_PARAM_MAX after addition
+// Instrument differentiation via pattern selection weights
+// Each instrument has preference weights (m_preference, n_preference) that influence
+// which (m,n) pair is selected from physics-valid options during pattern generation.
+// NOTE: m_offset and n_offset are kept for backwards compatibility but are no longer
+// used in the uniqueness calculation - COMBINATION_OFFSETS provides uniqueness instead.
 const INSTRUMENT_WEIGHTS = {
   'piano':   { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  },   // Baseline
   'guitar':  { m_preference: 0.20, n_preference: 0.80, m_offset: 3,  n_offset: 7  },   // Strong n-dominant
@@ -1174,7 +1175,6 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   // Apply final clamping as safety net for edge cases
   const clamped = clampChladniParameters(m, n);
   m = clamped.m;
-  n = clamped.n;
   n = clamped.n;
   
   // Update sliders and displays

@@ -44,6 +44,7 @@ const PLATE_LENGTH = 0.5; // meters - typical square plate size
 const WAVE_SPEED = 31.0; // m/s - calibrated for musical frequency range
 const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 31 Hz
 const PHYSICS_TOLERANCE_FACTOR = 1.5; // Tolerance multiplier for finding valid (m,n) pairs
+const PHYSICS_FALLBACK_PAIRS = 5; // Number of closest (m,n) pairs to consider when no exact match
 
 // Instrument differentiation via pattern selection weights
 // When multiple (m,n) pairs satisfy a frequency, these weights determine preference
@@ -876,9 +877,9 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
         allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
       }
     }
-    // Sort by accuracy and take top 5
+    // Sort by accuracy and take top PHYSICS_FALLBACK_PAIRS
     allPairs.sort((a, b) => a.diff - b.diff);
-    validPairs.push(...allPairs.slice(0, 5));
+    validPairs.push(...allPairs.slice(0, PHYSICS_FALLBACK_PAIRS));
   }
   
   // Get instrument-specific preference weights

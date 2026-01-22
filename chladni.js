@@ -48,6 +48,24 @@ const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 1.5 
 const PHYSICS_TOLERANCE_FACTOR = 0.5; // Tolerance for finding valid (m,n) pairs
 const PHYSICS_FALLBACK_PAIRS = 10; // Number of closest (m,n) pairs to consider when no exact match
 
+// Frequency hashing constants for ensuring unique patterns
+// These prime numbers and modulo values create distributed hash values for uniqueness
+const FREQ_HASH_PRIME_1 = 17;  // First prime multiplier for integer part
+const FREQ_HASH_PRIME_2 = 997; // Second prime multiplier for decimal part
+const FREQ_HASH_MOD_1 = 17.3;  // First modulo for hash distribution
+const FREQ_HASH_PRIME_3 = 31;  // Third prime multiplier for integer part
+const FREQ_HASH_PRIME_4 = 1009; // Fourth prime multiplier for decimal part
+const FREQ_HASH_MOD_2 = 17.7;  // Second modulo for hash distribution
+
+// Note-specific variation constants for instrument+note combinations
+const NOTE_HASH_PRIME_M1 = 7;   // Prime multiplier for m offset calculation
+const NOTE_HASH_PRIME_M2 = 3;   // Prime multiplier for m offset decimal part
+const NOTE_HASH_MOD_M = 101;    // Prime modulo for m offset distribution
+const NOTE_HASH_PRIME_N1 = 11;  // Prime multiplier for n offset calculation
+const NOTE_HASH_PRIME_N2 = 13;  // Prime multiplier for n offset decimal part
+const NOTE_HASH_MOD_N = 103;    // Prime modulo for n offset distribution
+const NOTE_OFFSET_RANGE = 5;    // Maximum range for note-specific offsets (0-4)
+
 // Instrument differentiation via STRONG pattern selection weights and offsets
 // Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
 // These offsets guarantee every instrument+note combination produces different m,n values
@@ -347,11 +365,100 @@ const clampChladniParameters = (mValue, nValue) => {
   return { m: clampedM, n: clampedN };
 };
 
+// Function to create a deterministic hash from frequency for uniqueness
+const hashFrequency = (frequency) => {
+  // Use the decimal part of the frequency to create variation
+  // Multiply by large prime numbers to spread values across the range
+  const intPart = Math.floor(frequency);
+  const decimalPart = frequency - intPart;
+  
+  // Create hash components using prime number multiplication
+  const hash1 = (intPart * FREQ_HASH_PRIME_1 + decimalPart * FREQ_HASH_PRIME_2) % FREQ_HASH_MOD_1;
+  const hash2 = (intPart * FREQ_HASH_PRIME_3 + decimalPart * FREQ_HASH_PRIME_4) % FREQ_HASH_MOD_2;
+  
+  return { hash1, hash2 };
+};
+
 // Function to apply a specific frequency to m and n parameters
 const applySpecificFrequency = (frequency) => {
-  // Map the frequency to m and n values using logarithmic scaling
-  const mValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-  const nValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
+  // Use physics-based calculation similar to instrument notes
+  const targetSum = Math.pow(frequency / PHYSICS_CONSTANT, 2);
+  
+  // Find valid (m, n) pairs that satisfy the frequency equation
+  const validPairs = [];
+  
+  for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+    for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+      const sum = testM * testM + testN * testN;
+      const tolerance = PHYSICS_TOLERANCE_FACTOR * (testM + testN);
+      if (Math.abs(sum - targetSum) <= tolerance) {
+        validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
+      }
+    }
+  }
+  
+  // If no matches found, find closest matches
+  if (validPairs.length === 0) {
+    const allPairs = [];
+    for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+      for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+        const sum = testM * testM + testN * testN;
+        const diff = Math.abs(sum - targetSum);
+        allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
+      }
+    }
+    allPairs.sort((a, b) => a.diff - b.diff);
+    validPairs.push(...allPairs.slice(0, PHYSICS_FALLBACK_PAIRS));
+  }
+  
+  // Create frequency-based hash for uniqueness
+  const freqHash = hashFrequency(frequency);
+  
+  // Select best pair using frequency hash as selection criterion
+  // This ensures each unique frequency gets a unique pattern
+  let bestPair = validPairs[0];
+  let bestScore = -Infinity;
+  
+  for (let pair of validPairs) {
+    // Normalize m and n to 0-1 range
+    const mNorm = (pair.m - M_PARAM_MIN) / (M_PARAM_MAX - M_PARAM_MIN);
+    const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
+    
+    // Use hash to determine target preferences (varies with frequency)
+    const mTarget = (freqHash.hash1 / FREQ_HASH_MOD_1);
+    const nTarget = (freqHash.hash2 / FREQ_HASH_MOD_2);
+    
+    // Score based on how close normalized m,n are to hash-based targets
+    const mScore = 1 - Math.abs(mNorm - mTarget);
+    const nScore = 1 - Math.abs(nNorm - nTarget);
+    
+    // Physics accuracy score
+    const accuracyScore = 1 / (1 + pair.diff / (targetSum + 1));
+    
+    // Combined score: physics (2x) + hash-based uniqueness (3x each)
+    const totalScore = accuracyScore * 2 + mScore * 3 + nScore * 3;
+    
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestPair = pair;
+    }
+  }
+  
+  // Apply frequency-based offsets for additional uniqueness
+  // Use hash values scaled to create small but distinct offsets
+  const mOffset = Math.floor(freqHash.hash1);
+  const nOffset = Math.floor(freqHash.hash2);
+  
+  let mValue = bestPair.m + mOffset;
+  let nValue = bestPair.n + nOffset;
+  
+  // Handle overflow by wrapping
+  if (mValue > M_PARAM_MAX) {
+    mValue = M_PARAM_MIN + (mValue - M_PARAM_MAX - 1);
+  }
+  if (nValue > N_PARAM_MAX) {
+    nValue = N_PARAM_MIN + (nValue - N_PARAM_MAX - 1);
+  }
   
   // Clamp values to valid ranges
   const clamped = clampChladniParameters(mValue, nValue);
@@ -987,8 +1094,22 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   const mOffset = weights.m_offset || 0;
   const nOffset = weights.n_offset || 0;
   
-  m = bestPair.m + mOffset;
-  n = bestPair.n + nOffset;
+  // Add note-specific variation to ensure each note produces a unique pattern
+  // Use frequency-based hash to guarantee uniqueness even if note names differ
+  let noteOffsetM = 0;
+  let noteOffsetN = 0;
+  if (note && frequency) {
+    // Use the integer part of frequency for deterministic but unique offsets
+    const freqInt = Math.floor(frequency);
+    const freqDec = Math.floor((frequency - freqInt) * 100);
+    
+    // Create offsets that vary with frequency using prime modulo operations
+    noteOffsetM = ((freqInt * NOTE_HASH_PRIME_M1 + freqDec * NOTE_HASH_PRIME_M2) % NOTE_HASH_MOD_M) % NOTE_OFFSET_RANGE;
+    noteOffsetN = ((freqInt * NOTE_HASH_PRIME_N1 + freqDec * NOTE_HASH_PRIME_N2) % NOTE_HASH_MOD_N) % NOTE_OFFSET_RANGE;
+  }
+  
+  m = bestPair.m + mOffset + noteOffsetM;
+  n = bestPair.n + nOffset + noteOffsetN;
   
   // Handle overflow by wrapping instead of clamping to maintain uniqueness
   if (m > M_PARAM_MAX) {

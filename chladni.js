@@ -48,12 +48,12 @@ const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 31 H
 // When multiple (m,n) pairs satisfy a frequency, these weights determine preference
 // Higher values favor higher m or n (more complex patterns)
 const INSTRUMENT_WEIGHTS = {
-  'piano': { m_preference: 0.6, n_preference: 0.5 },      // Balanced, slightly complex
-  'guitar': { m_preference: 0.3, n_preference: 0.4 },     // Simpler patterns
-  'violin': { m_preference: 0.5, n_preference: 0.7 },     // More n-dominant
-  'flute': { m_preference: 0.2, n_preference: 0.2 },      // Simplest patterns
-  'trumpet': { m_preference: 0.8, n_preference: 0.6 },    // Complex, m-dominant
-  'cello': { m_preference: 0.4, n_preference: 0.5 },      // Moderate complexity
+  'piano': { m_preference: 0.55, n_preference: 0.55 },    // Balanced, moderate complexity
+  'guitar': { m_preference: 0.35, n_preference: 0.65 },   // Prefers higher n (vertical modes)
+  'violin': { m_preference: 0.45, n_preference: 0.75 },   // Strong n-dominant
+  'flute': { m_preference: 0.25, n_preference: 0.25 },    // Simplest patterns (low m,n)
+  'trumpet': { m_preference: 0.75, n_preference: 0.45 },  // Strong m-dominant (horizontal modes)
+  'cello': { m_preference: 0.65, n_preference: 0.35 },    // m-dominant, moderate
   'default': { m_preference: 0.5, n_preference: 0.5 }     // Neutral
 };
 
@@ -857,29 +857,27 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
     for (let testN = M_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
       const sum = testM * testM + testN * testN;
-      // Allow small tolerance for discrete integer values
-      const tolerance = 0.5 * (testM + testN); // Adaptive tolerance
+      // Generous tolerance to allow multiple solutions for instrument differentiation
+      const tolerance = 1.5 * (testM + testN);
       if (Math.abs(sum - targetSum) <= tolerance) {
         validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
       }
     }
   }
   
-  // If no exact matches found, find the closest match
+  // If no matches found, find several closest matches
   if (validPairs.length === 0) {
-    let closestPair = { m: M_PARAM_MIN, n: M_PARAM_MIN, diff: Infinity };
-    
+    const allPairs = [];
     for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
       for (let testN = M_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
         const sum = testM * testM + testN * testN;
         const diff = Math.abs(sum - targetSum);
-        if (diff < closestPair.diff) {
-          closestPair = { m: testM, n: testN, sum: sum, diff: diff };
-        }
+        allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
       }
     }
-    
-    validPairs.push(closestPair);
+    // Sort by accuracy and take top 5
+    allPairs.sort((a, b) => a.diff - b.diff);
+    validPairs.push(...allPairs.slice(0, 5));
   }
   
   // Get instrument-specific preference weights
@@ -917,16 +915,20 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     const mNorm = (pair.m - M_PARAM_MIN) / (M_PARAM_MAX - M_PARAM_MIN);
     const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
     
+    // Calculate m/n ratio preference for this instrument
+    const mTarget = weights.m_preference * (0.5 + 0.5 * harmonicWeight);
+    const nTarget = weights.n_preference * (0.5 + 0.5 * harmonicWeight);
+    
     // Score based on how close normalized m,n are to instrument preferences
-    // Modified by harmonic content: richer harmonics push toward preference
-    const mScore = 1 - Math.abs(mNorm - (weights.m_preference * (0.5 + 0.5 * harmonicWeight)));
-    const nScore = 1 - Math.abs(nNorm - (weights.n_preference * (0.5 + 0.5 * harmonicWeight)));
+    const mScore = 1 - Math.abs(mNorm - mTarget);
+    const nScore = 1 - Math.abs(nNorm - nTarget);
     
-    // Penalize pairs that are too far from target frequency (prioritize accuracy)
-    const accuracyScore = 1 / (1 + pair.diff / targetSum);
+    // Physics accuracy score - normalized so very close matches aren't overly dominant
+    const accuracyScore = 1 / (1 + pair.diff / (targetSum + 1));
     
-    // Combined score: physics accuracy is most important, then instrument preference
-    const totalScore = accuracyScore * 10 + mScore + nScore;
+    // Combined score: balance physics (2x weight) with instrument preference (3x weight each)
+    // This allows more instrument differentiation while still respecting physics
+    const totalScore = accuracyScore * 2 + mScore * 3 + nScore * 3;
     
     if (totalScore > bestScore) {
       bestScore = totalScore;

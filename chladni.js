@@ -33,7 +33,7 @@ const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to cr
 const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
-const FFT_CAPTURE_DELAY_MS = 150; // milliseconds to wait for FFT to capture harmonic content
+const FFT_CAPTURE_DELAY_MS = 100; // milliseconds to wait for FFT to capture harmonic content
 const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for fundamental (avoids harmonics)
 
 // Musical interval constants
@@ -794,11 +794,16 @@ const analyzeInstrumentSpectrum = (instrument) => {
   }
   
   // Define frequency bands for analysis based on the actual fundamental
+  // Ensure bands don't overlap and have valid ranges
+  const lowHarmonicEnd = Math.max(fundamentalBin + 3, Math.round((fundamentalFreq * 3) / frequencyResolution));
+  const midHarmonicEnd = Math.max(lowHarmonicEnd + 1, Math.round((fundamentalFreq * 6) / frequencyResolution));
+  const highHarmonicEnd = Math.max(midHarmonicEnd + 1, Math.min(bufferLength - 1, Math.round((fundamentalFreq * 10) / frequencyResolution)));
+  
   const bands = [
     { name: 'fundamental', startBin: Math.max(1, fundamentalBin - 2), endBin: fundamentalBin + 2 },
-    { name: 'low_harmonics', startBin: fundamentalBin + 3, endBin: Math.round((fundamentalFreq * 3) / frequencyResolution) },
-    { name: 'mid_harmonics', startBin: Math.round((fundamentalFreq * 3) / frequencyResolution) + 1, endBin: Math.round((fundamentalFreq * 6) / frequencyResolution) },
-    { name: 'high_harmonics', startBin: Math.round((fundamentalFreq * 6) / frequencyResolution) + 1, endBin: Math.min(bufferLength - 1, Math.round((fundamentalFreq * 10) / frequencyResolution)) }
+    { name: 'low_harmonics', startBin: fundamentalBin + 3, endBin: lowHarmonicEnd },
+    { name: 'mid_harmonics', startBin: lowHarmonicEnd + 1, endBin: midHarmonicEnd },
+    { name: 'high_harmonics', startBin: midHarmonicEnd + 1, endBin: highHarmonicEnd }
   ];
   
   // Calculate energy in each band

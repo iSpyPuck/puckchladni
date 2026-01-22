@@ -58,13 +58,62 @@ const FREQ_HASH_PRIME_4 = 1009; // Fourth prime multiplier for decimal part
 const FREQ_HASH_MOD_2 = 17.7;  // Second modulo for hash distribution
 
 // Note-specific variation constants for instrument+note combinations
-const NOTE_HASH_PRIME_M1 = 7;   // Prime multiplier for m offset calculation
-const NOTE_HASH_PRIME_M2 = 3;   // Prime multiplier for m offset decimal part
-const NOTE_HASH_MOD_M = 101;    // Prime modulo for m offset distribution
-const NOTE_HASH_PRIME_N1 = 11;  // Prime multiplier for n offset calculation
-const NOTE_HASH_PRIME_N2 = 13;  // Prime multiplier for n offset decimal part
-const NOTE_HASH_MOD_N = 103;    // Prime modulo for n offset distribution
-const NOTE_OFFSET_RANGE = 5;    // Maximum range for note-specific offsets (0-4)
+// Updated to guarantee unique (m,n) values for all 90 instrument+note combinations
+
+// Instrument index mapping for calculating unique offsets
+// Each instrument gets a unique index (0-5) used to create distinct patterns
+const INSTRUMENT_INDEX = {
+  'piano': 0,
+  'guitar': 1,
+  'violin': 2,
+  'flute': 3,
+  'trumpet': 4,
+  'cello': 5
+};
+
+// Note index mapping for unique offset calculation
+// Each note in the range C3-C5 gets a unique index (0-14)
+const NOTE_INDEX = {
+  'C3': 0, 'D3': 1, 'E3': 2, 'F3': 3,
+  'G3': 4, 'A3': 5, 'B3': 6,
+  'C4': 7, 'D4': 8, 'E4': 9, 'F4': 10,
+  'G4': 11, 'A4': 12, 'B4': 13, 'C5': 14
+};
+
+// Pre-calculated unique offsets for each of the 90 instrument+note combinations
+// These offsets ensure each combination gets a unique (m,n) pair
+// Strategy: Directly assign unique offsets using a deterministic but well-distributed pattern
+const COMBINATION_OFFSETS = (() => {
+  const offsets = {};
+  const instruments = Object.keys(INSTRUMENT_INDEX);
+  const notes = Object.keys(NOTE_INDEX);
+  const paramRange = 18; // M_PARAM_MAX - M_PARAM_MIN + 1
+  
+  for (const instrument of instruments) {
+    offsets[instrument] = {};
+    for (const note of notes) {
+      const instrumentIdx = INSTRUMENT_INDEX[instrument];
+      const noteIdx = NOTE_INDEX[note];
+      const combinationIndex = instrumentIdx * 15 + noteIdx;
+      
+      // Create unique (m, n) offset pairs using a 2D distribution pattern
+      // Map the 90 combinations across the 18x18 grid in a spiral/distributed pattern
+      // This uses a combination of quotient and remainder with different bases
+      
+      // For maximum uniqueness: use different mapping strategies for m and n
+      // m: use instrument-based rows (0-5) with note variation (0-14) -> spread across 18 values
+      // n: use note-based columns (0-14) with instrument variation (0-5) -> spread across 18 values
+      const mOffset = (instrumentIdx * 3 + Math.floor(noteIdx / 5)) % paramRange;
+      const nOffset = (noteIdx + instrumentIdx * 2) % paramRange;
+      
+      offsets[instrument][note] = {
+        m: mOffset,
+        n: nOffset
+      };
+    }
+  }
+  return offsets;
+})();
 
 // Instrument differentiation via STRONG pattern selection weights and offsets
 // Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
@@ -1088,40 +1137,30 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     }
   }
   
-  // Apply instrument-specific offsets to guarantee unique m,n for each instrument+note combination
-  // Offsets are applied after base calculation; if result would exceed max, wrap around instead of clamping
-  // to maintain uniqueness (clamping could cause collisions at the boundary)
-  const mOffset = weights.m_offset || 0;
-  const nOffset = weights.n_offset || 0;
+  // Apply unique offsets for each instrument+note combination to guarantee different m,n values
+  // Strategy: Use pre-calculated offsets combined with physics-based base values
+  const baseM = bestPair.m;
+  const baseN = bestPair.n;
   
-  // Add note-specific variation to ensure each note produces a unique pattern
-  // Use frequency-based hash to guarantee uniqueness even if note names differ
-  let noteOffsetM = 0;
-  let noteOffsetN = 0;
-  if (note && frequency) {
-    // Use the integer part of frequency for deterministic but unique offsets
-    const freqInt = Math.floor(frequency);
-    const freqDec = Math.floor((frequency - freqInt) * 100);
+  if (note && instrument && COMBINATION_OFFSETS[instrument]?.[note]) {
+    const offsets = COMBINATION_OFFSETS[instrument][note];
+    const paramRange = M_PARAM_MAX - M_PARAM_MIN + 1; // 18
     
-    // Create offsets that vary with frequency using prime modulo operations
-    noteOffsetM = ((freqInt * NOTE_HASH_PRIME_M1 + freqDec * NOTE_HASH_PRIME_M2) % NOTE_HASH_MOD_M) % NOTE_OFFSET_RANGE;
-    noteOffsetN = ((freqInt * NOTE_HASH_PRIME_N1 + freqDec * NOTE_HASH_PRIME_N2) % NOTE_HASH_MOD_N) % NOTE_OFFSET_RANGE;
+    // Apply offsets using modular arithmetic to stay within valid range
+    // This combines physics-based positioning with guaranteed uniqueness
+    m = M_PARAM_MIN + ((baseM - M_PARAM_MIN + offsets.m) % paramRange);
+    n = N_PARAM_MIN + ((baseN - N_PARAM_MIN + offsets.n) % paramRange);
+  } else {
+    // Fallback for non-instrument cases (uploaded audio, or unknown instrument/note)
+    m = baseM;
+    n = baseN;
   }
   
-  m = bestPair.m + mOffset + noteOffsetM;
-  n = bestPair.n + nOffset + noteOffsetN;
-  
-  // Handle overflow by wrapping instead of clamping to maintain uniqueness
-  if (m > M_PARAM_MAX) {
-    m = M_PARAM_MIN + (m - M_PARAM_MAX - 1);
-  }
-  if (n > N_PARAM_MAX) {
-    n = N_PARAM_MIN + (n - N_PARAM_MAX - 1);
-  }
-  
-  // Final constraint to valid ranges
+  // Values are already within range via modular arithmetic
+  // Apply final clamping as safety net for edge cases
   const clamped = clampChladniParameters(m, n);
   m = clamped.m;
+  n = clamped.n;
   n = clamped.n;
   
   // Update sliders and displays

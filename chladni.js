@@ -33,6 +33,8 @@ const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to cr
 const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
 const MAX_HARMONIC_MULTIPLIER_N = 3.0; // Maximum harmonic multiplier for n (violin: 3.0)
+const FFT_CAPTURE_DELAY_MS = 150; // milliseconds to wait for FFT to capture harmonic content
+const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for fundamental (avoids harmonics)
 
 // Musical interval constants
 const PERFECT_FOURTH_INTERVAL = 4/3; // Perfect fourth frequency ratio
@@ -291,6 +293,13 @@ const updateParameterSliders = (mValue, nValue) => {
   document.getElementById('nValue').textContent = nValue;
 };
 
+// Helper function to clamp Chladni parameters to valid ranges
+const clampChladniParameters = (mValue, nValue) => {
+  const clampedM = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, mValue));
+  const clampedN = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, nValue));
+  return { m: clampedM, n: clampedN };
+};
+
 const handleAudioUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -429,14 +438,17 @@ const updateAudioVisualization = () => {
   if (dominantFrequency > 0) {
     // Map frequency to m parameter, adding offset to prevent Math.log(0)
     m = mapFrequencyToRange(dominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
-    m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
   }
   
   if (secondDominantFrequency > 0) {
     // Map second frequency to n parameter, adding offset to prevent Math.log(0)
     n = mapFrequencyToRange(secondDominantFrequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
-    n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
   }
+  
+  // Constrain to valid ranges using helper function
+  const clamped = clampChladniParameters(m, n);
+  m = clamped.m;
+  n = clamped.n;
 
   // update slider displays to reflect audio-driven values
   updateParameterSliders(m, n);
@@ -723,10 +735,10 @@ const playInstrumentNote = () => {
   // Allow time for the FFT to capture the harmonic content, then analyze
   // the spectrum to set m and n parameters based on instrument characteristics
   // Note: A fixed delay is used as Web Audio API doesn't provide a direct event
-  // for when FFT data is ready. 150ms provides reliable capture across devices.
+  // for when FFT data is ready. This delay provides reliable capture across devices.
   setTimeout(() => {
     analyzeInstrumentSpectrum(instrument);
-  }, 150); // Wait for oscillators to stabilize and FFT to capture data
+  }, FFT_CAPTURE_DELAY_MS);
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
@@ -754,9 +766,8 @@ const analyzeInstrumentSpectrum = (instrument) => {
   let maxAmplitude = 0;
   let fundamentalBin = 0;
   
-  // Only search up to ~800 Hz to ensure we find the fundamental, not a harmonic
-  const maxFundamentalFreq = 800; // Hz
-  const maxSearchBin = Math.min(bufferLength, Math.floor(maxFundamentalFreq / frequencyResolution));
+  // Only search up to MAX_FUNDAMENTAL_SEARCH_FREQ to ensure we find the fundamental, not a harmonic
+  const maxSearchBin = Math.min(bufferLength, Math.floor(MAX_FUNDAMENTAL_SEARCH_FREQ / frequencyResolution));
   
   for (let i = 1; i < maxSearchBin; i++) {
     if (dataArray[i] > maxAmplitude) {
@@ -837,9 +848,10 @@ const analyzeInstrumentSpectrum = (instrument) => {
     n = Math.floor((N_PARAM_MIN + N_PARAM_MAX) / 2);
   }
   
-  // Constrain to valid ranges
-  m = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, m));
-  n = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, n));
+  // Constrain to valid ranges using helper function
+  const clamped = clampChladniParameters(m, n);
+  m = clamped.m;
+  n = clamped.n;
   
   // Update sliders and displays
   updateParameterSliders(m, n);

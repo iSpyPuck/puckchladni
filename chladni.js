@@ -26,9 +26,9 @@ const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
 const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 const M_PARAM_MIN = 1; // Minimum value for m parameter
-const M_PARAM_MAX = 500; // Maximum value for m parameter (increased 100x for dramatic variation)
+const M_PARAM_MAX = 5; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
-const N_PARAM_MAX = 500; // Maximum value for n parameter (increased 100x for dramatic variation)
+const N_PARAM_MAX = 5; // Maximum value for n parameter
 const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to create variation from m
 const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
@@ -40,7 +40,7 @@ const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for
 // f_mn = (c/2L) × √(m² + n²)
 // where c is wave speed in plate (m/s) and L is plate length (m)
 // NOTE: These values are calibrated for VISUAL/ARTISTIC purposes, not physical accuracy.
-// The goal is to map musical frequencies (130-523 Hz) to m,n values across 1-500 range
+// The goal is to map musical frequencies (130-523 Hz) to m,n values across 1-5 range
 // for dramatic visual variation. Actual plate physics would require different constants.
 const PLATE_LENGTH = 0.5; // meters - typical square plate size
 const WAVE_SPEED = 1.5; // m/s - intentionally low for extended visual m,n range
@@ -51,15 +51,15 @@ const PHYSICS_FALLBACK_PAIRS = 10; // Number of closest (m,n) pairs to consider 
 // Instrument differentiation via STRONG pattern selection weights and offsets
 // Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
 // These offsets guarantee every instrument+note combination produces different m,n values
-// Offsets are kept small (max 13) to avoid exceeding M_PARAM_MAX/N_PARAM_MAX after addition
+// Offsets are kept small to avoid exceeding M_PARAM_MAX/N_PARAM_MAX after addition
 const INSTRUMENT_WEIGHTS = {
-  'piano':   { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  },   // Baseline
-  'guitar':  { m_preference: 0.20, n_preference: 0.80, m_offset: 3,  n_offset: 7  },   // Strong n-dominant
-  'violin':  { m_preference: 0.30, n_preference: 0.90, m_offset: 5,  n_offset: 11 },   // Very strong n-dominant
-  'flute':   { m_preference: 0.10, n_preference: 0.10, m_offset: 2,  n_offset: 3  },   // Simplest patterns
-  'trumpet': { m_preference: 0.90, n_preference: 0.20, m_offset: 13, n_offset: 5  },   // Very strong m-dominant
-  'cello':   { m_preference: 0.80, n_preference: 0.30, m_offset: 9,  n_offset: 4  },   // Strong m-dominant
-  'default': { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  }    // Neutral
+  'piano':   { m_preference: 0.50, n_preference: 0.50, m_offset: 0, n_offset: 0 },   // Baseline
+  'guitar':  { m_preference: 0.20, n_preference: 0.80, m_offset: 0, n_offset: 1 },   // Strong n-dominant
+  'violin':  { m_preference: 0.30, n_preference: 0.90, m_offset: 1, n_offset: 1 },   // Very strong n-dominant
+  'flute':   { m_preference: 0.10, n_preference: 0.10, m_offset: 0, n_offset: 0 },   // Simplest patterns
+  'trumpet': { m_preference: 0.90, n_preference: 0.20, m_offset: 1, n_offset: 0 },   // Very strong m-dominant
+  'cello':   { m_preference: 0.80, n_preference: 0.30, m_offset: 1, n_offset: 0 },   // Strong m-dominant
+  'default': { m_preference: 0.50, n_preference: 0.50, m_offset: 0, n_offset: 0 }    // Neutral
 };
 
 // Musical interval constants

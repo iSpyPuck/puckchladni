@@ -722,9 +722,11 @@ const playInstrumentNote = () => {
   
   // Allow time for the FFT to capture the harmonic content, then analyze
   // the spectrum to set m and n parameters based on instrument characteristics
+  // Note: A fixed delay is used as Web Audio API doesn't provide a direct event
+  // for when FFT data is ready. 150ms provides reliable capture across devices.
   setTimeout(() => {
     analyzeInstrumentSpectrum(instrument);
-  }, 100); // Wait 100ms for oscillators to stabilize and FFT to capture data
+  }, 150); // Wait for oscillators to stabilize and FFT to capture data
   
   instrumentOscillator.onended = () => {
     instrumentOscillator = null;
@@ -748,10 +750,15 @@ const analyzeInstrumentSpectrum = (instrument) => {
   const frequencyResolution = sampleRate / analyser.fftSize;
   
   // Find the dominant frequency (fundamental) dynamically from the spectrum
+  // Limit search to lower frequencies to avoid mistaking harmonics for the fundamental
   let maxAmplitude = 0;
   let fundamentalBin = 0;
   
-  for (let i = 1; i < bufferLength; i++) {
+  // Only search up to ~800 Hz to ensure we find the fundamental, not a harmonic
+  const maxFundamentalFreq = 800; // Hz
+  const maxSearchBin = Math.min(bufferLength, Math.floor(maxFundamentalFreq / frequencyResolution));
+  
+  for (let i = 1; i < maxSearchBin; i++) {
     if (dataArray[i] > maxAmplitude) {
       maxAmplitude = dataArray[i];
       fundamentalBin = i;

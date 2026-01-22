@@ -39,16 +39,19 @@ const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for
 // Physics constants for Chladni plate resonance
 // f_mn = (c/2L) × √(m² + n²)
 // where c is wave speed in plate (m/s) and L is plate length (m)
-// Calibrated so that musical frequencies (130-523 Hz) map to m,n values across 1-500 range
+// NOTE: These values are calibrated for VISUAL/ARTISTIC purposes, not physical accuracy.
+// The goal is to map musical frequencies (130-523 Hz) to m,n values across 1-500 range
+// for dramatic visual variation. Actual plate physics would require different constants.
 const PLATE_LENGTH = 0.5; // meters - typical square plate size
-const WAVE_SPEED = 1.5; // m/s - calibrated for extended m,n range (reduced from 31 to spread values more)
+const WAVE_SPEED = 1.5; // m/s - intentionally low for extended visual m,n range
 const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 1.5 Hz
-const PHYSICS_TOLERANCE_FACTOR = 0.1; // Tighter tolerance for more precise matching (reduced from 1.5)
+const PHYSICS_TOLERANCE_FACTOR = 0.5; // Tolerance for finding valid (m,n) pairs
 const PHYSICS_FALLBACK_PAIRS = 10; // Number of closest (m,n) pairs to consider when no exact match
 
 // Instrument differentiation via STRONG pattern selection weights and offsets
 // Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
 // These offsets guarantee every instrument+note combination produces different m,n values
+// Offsets are kept small (max 13) to avoid exceeding M_PARAM_MAX/N_PARAM_MAX after addition
 const INSTRUMENT_WEIGHTS = {
   'piano':   { m_preference: 0.50, n_preference: 0.50, m_offset: 0,  n_offset: 0  },   // Baseline
   'guitar':  { m_preference: 0.20, n_preference: 0.80, m_offset: 3,  n_offset: 7  },   // Strong n-dominant
@@ -941,13 +944,23 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   }
   
   // Apply instrument-specific offsets to guarantee unique m,n for each instrument+note combination
+  // Offsets are applied after base calculation; if result would exceed max, wrap around instead of clamping
+  // to maintain uniqueness (clamping could cause collisions at the boundary)
   const mOffset = weights.m_offset || 0;
   const nOffset = weights.n_offset || 0;
   
   m = bestPair.m + mOffset;
   n = bestPair.n + nOffset;
   
-  // Constrain to valid ranges using helper function
+  // Handle overflow by wrapping instead of clamping to maintain uniqueness
+  if (m > M_PARAM_MAX) {
+    m = M_PARAM_MIN + (m - M_PARAM_MAX - 1);
+  }
+  if (n > N_PARAM_MAX) {
+    n = N_PARAM_MIN + (n - N_PARAM_MAX - 1);
+  }
+  
+  // Final constraint to valid ranges
   const clamped = clampChladniParameters(m, n);
   m = clamped.m;
   n = clamped.n;

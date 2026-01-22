@@ -1077,18 +1077,18 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   const nOffset = weights.n_offset || 0;
   
   // Add note-specific variation to ensure each note produces a unique pattern
-  // Extract note name (e.g., "C3" -> C=67, 3=51 in ASCII)
-  let noteHash = 0;
-  if (note) {
-    for (let i = 0; i < note.length; i++) {
-      noteHash += note.charCodeAt(i);
-    }
-    // Use hash to create small, unique offsets (0-2 range for m and n)
-    noteHash = noteHash % 37; // Prime modulo for better distribution
+  // Use frequency-based hash to guarantee uniqueness even if note names differ
+  let noteOffsetM = 0;
+  let noteOffsetN = 0;
+  if (note && frequency) {
+    // Use the integer part of frequency for deterministic but unique offsets
+    const freqInt = Math.floor(frequency);
+    const freqDec = Math.floor((frequency - freqInt) * 100);
+    
+    // Create offsets that vary with frequency (0-4 range for better distribution)
+    noteOffsetM = ((freqInt * 7 + freqDec * 3) % 101) % 5;
+    noteOffsetN = ((freqInt * 11 + freqDec * 13) % 103) % 5;
   }
-  
-  const noteOffsetM = Math.floor(noteHash / 7) % 3; // 0, 1, or 2
-  const noteOffsetN = (noteHash % 7) % 3; // 0, 1, or 2
   
   m = bestPair.m + mOffset + noteOffsetM;
   n = bestPair.n + nOffset + noteOffsetN;

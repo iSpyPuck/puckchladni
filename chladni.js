@@ -213,7 +213,7 @@ const DOMinit = () => {
   
   applyFrequencyBtn.addEventListener('click', () => {
     const frequency = parseFloat(frequencyInput.value);
-    if (frequency && frequency >= 20 && frequency <= 2000) {
+    if (!isNaN(frequency) && frequency >= 20 && frequency <= 2000) {
       applySpecificFrequency(frequency);
     } else {
       alert('Please enter a frequency between 20 and 2000 Hz');

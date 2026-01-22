@@ -82,7 +82,7 @@ const NOTE_INDEX = {
 
 // Pre-calculated unique offsets for each of the 90 instrument+note combinations
 // ==================================================================================
-// UNIQUENESS GUARANTEE: Each of the 90 combinations (6 instruments × 15 notes)
+// UNIQUENESS ASSURANCE: Each of the 90 combinations (6 instruments × 15 notes)
 // receives a different (m,n) offset pair, ensuring visually distinct Chladni patterns.
 //
 // STRATEGY:
@@ -109,6 +109,15 @@ const COMBINATION_OFFSETS = (() => {
       const noteIdx = NOTE_INDEX[note];
       
       // Calculate unique offsets using 2D distribution pattern
+      // Formula verification: These specific coefficients ensure all 90 combinations
+      // produce unique (m,n) offset pairs within the 18x18 parameter space:
+      // - m: (instrumentIdx * 3 + floor(noteIdx / 5)) % 18
+      //   - 6 instruments × 3 = 18 distinct base values (0, 3, 6, 9, 12, 15)
+      //   - floor(noteIdx / 5) adds 0, 1, or 2 based on note grouping
+      // - n: (noteIdx + instrumentIdx * 2) % 18
+      //   - 15 notes provide base variation (0-14)
+      //   - instrumentIdx * 2 adds instrument-specific shift (0, 2, 4, 6, 8, 10)
+      // Tested: All 90 combinations verified to produce unique final (m,n) values
       const mOffset = (instrumentIdx * 3 + Math.floor(noteIdx / 5)) % paramRange;
       const nOffset = (noteIdx + instrumentIdx * 2) % paramRange;
       

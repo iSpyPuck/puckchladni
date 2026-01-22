@@ -199,9 +199,15 @@ Each instrument has unique **preference weights** that influence which (m, n) pa
 
 Musical notes follow a logarithmic scale (each octave doubles the frequency). The mapping uses:
 
-```javascript
-mapped = (log(freq) - log(minFreq)) × (maxRange - minRange) / (log(maxFreq) - log(minFreq)) + minRange
 ```
+mapped_value = (log(freq) - log(min_freq)) × (max_param - min_param) / (log(max_freq) - log(min_freq)) + min_param
+```
+
+Where:
+- **freq**: The input frequency in Hz (e.g., 261.63 Hz for C4)
+- **min_freq, max_freq**: The frequency range (20 Hz to 2000 Hz in this simulation)
+- **min_param, max_param**: The target parameter range (1 to 500 for m and n values)
+- **mapped_value**: The resulting m or n value
 
 This ensures that:
 - Notes feel evenly spaced visually
@@ -303,7 +309,9 @@ Every musical instrument produces not just the fundamental frequency (the note y
 
 **Pattern characteristics**: High m_preference (0.80) like trumpet but with different offsets, creating unique horizontally-biased but warmer patterns.
 
-### The Complete Story: Instrument → Harmonics → Pattern
+### The Complete Story: How Sound Becomes Pattern
+
+The transformation from instrument sound to Chladni pattern follows this process:
 
 ```
 Instrument → Physical Mechanism → Harmonic Spectrum → m,n Selection → Chladni Pattern
@@ -339,20 +347,27 @@ Instrument → Physical Mechanism → Harmonic Spectrum → m,n Selection → Ch
 
 ### Key Mathematical Parameters
 
-| Note | Frequency | Approximate m² + n² Target |
-|------|-----------|----------------------------|
-| C3   | 130.81 Hz | ~7,613                     |
-| D3   | 146.83 Hz | ~9,588                     |
-| E3   | 164.81 Hz | ~12,080                    |
-| F3   | 174.61 Hz | ~13,562                    |
-| G3   | 196.00 Hz | ~17,085                    |
-| A3   | 220.00 Hz | ~21,522                    |
-| B3   | 246.94 Hz | ~27,126                    |
-| C4   | 261.63 Hz | ~30,441                    |
-| D4   | 293.66 Hz | ~38,365                    |
-| E4   | 329.63 Hz | ~48,327                    |
+The target m² + n² values are derived from the physics formula:
 
-*Note: Target values calculated using f = 1.5/(2×0.5) × √(m² + n²), showing how higher frequencies require higher mode numbers.*
+**Formula**: m² + n² = (f / PHYSICS_CONSTANT)² where PHYSICS_CONSTANT = c/(2L) = 1.5 Hz
+
+**Example calculation for C3 (130.81 Hz)**:
+- m² + n² = (130.81 / 1.5)² = (87.21)² ≈ 7,605
+
+| Note | Frequency | Calculation | Approximate m² + n² Target |
+|------|-----------|-------------|----------------------------|
+| C3   | 130.81 Hz | (130.81/1.5)² | ~7,613                  |
+| D3   | 146.83 Hz | (146.83/1.5)² | ~9,588                  |
+| E3   | 164.81 Hz | (164.81/1.5)² | ~12,080                 |
+| F3   | 174.61 Hz | (174.61/1.5)² | ~13,562                 |
+| G3   | 196.00 Hz | (196.00/1.5)² | ~17,085                 |
+| A3   | 220.00 Hz | (220.00/1.5)² | ~21,522                 |
+| B3   | 246.94 Hz | (246.94/1.5)² | ~27,126                 |
+| C4   | 261.63 Hz | (261.63/1.5)² | ~30,441                 |
+| D4   | 293.66 Hz | (293.66/1.5)² | ~38,365                 |
+| E4   | 329.63 Hz | (329.63/1.5)² | ~48,327                 |
+
+These calculations demonstrate how higher frequencies require higher mode numbers (m, n), resulting in more complex Chladni patterns.
 
 ---
 

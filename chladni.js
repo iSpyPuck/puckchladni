@@ -48,6 +48,24 @@ const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 1.5 
 const PHYSICS_TOLERANCE_FACTOR = 0.5; // Tolerance for finding valid (m,n) pairs
 const PHYSICS_FALLBACK_PAIRS = 10; // Number of closest (m,n) pairs to consider when no exact match
 
+// Frequency hashing constants for ensuring unique patterns
+// These prime numbers and modulo values create distributed hash values for uniqueness
+const FREQ_HASH_PRIME_1 = 17;  // First prime multiplier for integer part
+const FREQ_HASH_PRIME_2 = 997; // Second prime multiplier for decimal part
+const FREQ_HASH_MOD_1 = 17.3;  // First modulo for hash distribution
+const FREQ_HASH_PRIME_3 = 31;  // Third prime multiplier for integer part
+const FREQ_HASH_PRIME_4 = 1009; // Fourth prime multiplier for decimal part
+const FREQ_HASH_MOD_2 = 17.7;  // Second modulo for hash distribution
+
+// Note-specific variation constants for instrument+note combinations
+const NOTE_HASH_PRIME_M1 = 7;   // Prime multiplier for m offset calculation
+const NOTE_HASH_PRIME_M2 = 3;   // Prime multiplier for m offset decimal part
+const NOTE_HASH_MOD_M = 101;    // Prime modulo for m offset distribution
+const NOTE_HASH_PRIME_N1 = 11;  // Prime multiplier for n offset calculation
+const NOTE_HASH_PRIME_N2 = 13;  // Prime multiplier for n offset decimal part
+const NOTE_HASH_MOD_N = 103;    // Prime modulo for n offset distribution
+const NOTE_OFFSET_RANGE = 5;    // Maximum range for note-specific offsets (0-4)
+
 // Instrument differentiation via STRONG pattern selection weights and offsets
 // Each instrument has unique m_offset and n_offset that are added to ensure uniqueness
 // These offsets guarantee every instrument+note combination produces different m,n values
@@ -355,8 +373,8 @@ const hashFrequency = (frequency) => {
   const decimalPart = frequency - intPart;
   
   // Create hash components using prime number multiplication
-  const hash1 = (intPart * 17 + decimalPart * 997) % 17.3;
-  const hash2 = (intPart * 31 + decimalPart * 1009) % 17.7;
+  const hash1 = (intPart * FREQ_HASH_PRIME_1 + decimalPart * FREQ_HASH_PRIME_2) % FREQ_HASH_MOD_1;
+  const hash2 = (intPart * FREQ_HASH_PRIME_3 + decimalPart * FREQ_HASH_PRIME_4) % FREQ_HASH_MOD_2;
   
   return { hash1, hash2 };
 };
@@ -407,8 +425,8 @@ const applySpecificFrequency = (frequency) => {
     const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
     
     // Use hash to determine target preferences (varies with frequency)
-    const mTarget = (freqHash.hash1 / 17.3);
-    const nTarget = (freqHash.hash2 / 17.7);
+    const mTarget = (freqHash.hash1 / FREQ_HASH_MOD_1);
+    const nTarget = (freqHash.hash2 / FREQ_HASH_MOD_2);
     
     // Score based on how close normalized m,n are to hash-based targets
     const mScore = 1 - Math.abs(mNorm - mTarget);
@@ -1085,9 +1103,9 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     const freqInt = Math.floor(frequency);
     const freqDec = Math.floor((frequency - freqInt) * 100);
     
-    // Create offsets that vary with frequency (0-4 range for better distribution)
-    noteOffsetM = ((freqInt * 7 + freqDec * 3) % 101) % 5;
-    noteOffsetN = ((freqInt * 11 + freqDec * 13) % 103) % 5;
+    // Create offsets that vary with frequency using prime modulo operations
+    noteOffsetM = ((freqInt * NOTE_HASH_PRIME_M1 + freqDec * NOTE_HASH_PRIME_M2) % NOTE_HASH_MOD_M) % NOTE_OFFSET_RANGE;
+    noteOffsetN = ((freqInt * NOTE_HASH_PRIME_N1 + freqDec * NOTE_HASH_PRIME_N2) % NOTE_HASH_MOD_N) % NOTE_OFFSET_RANGE;
   }
   
   m = bestPair.m + mOffset + noteOffsetM;

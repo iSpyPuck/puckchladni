@@ -808,12 +808,14 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
     }
   }
   
-  const fundamentalFreq = fundamentalBin * frequencyResolution;
+  let fundamentalFreq = fundamentalBin * frequencyResolution;
   
-  // Validate that we found a meaningful fundamental frequency
+  // If FFT detection fails, use the known frequency as fallback
+  // This ensures the physics-based calculation always runs
   if (fundamentalFreq <= 0 || maxAmplitude === 0) {
-    console.warn('No valid fundamental frequency detected');
-    return;
+    console.log('Using known frequency as fallback:', frequency);
+    fundamentalFreq = frequency;
+    fundamentalBin = Math.round(frequency / frequencyResolution);
   }
   
   // Define frequency bands for analysis based on the actual fundamental

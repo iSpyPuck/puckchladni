@@ -206,7 +206,7 @@ mapped_value = (log(freq) - log(min_freq)) × (max_param - min_param) / (log(max
 Where:
 - **freq**: The input frequency in Hz (e.g., 261.63 Hz for C4)
 - **min_freq, max_freq**: The frequency range (20 Hz to 2000 Hz in this simulation)
-- **min_param, max_param**: The target parameter range (1 to 500 for m and n values)
+- **min_param, max_param**: The target parameter range (1 to 5 for m and n values)
 - **mapped_value**: The resulting m or n value
 
 This ensures that:

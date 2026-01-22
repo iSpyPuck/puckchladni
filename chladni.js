@@ -1096,6 +1096,9 @@ const showNotification = (message, type = 'success') => {
 const GRID_NOTES = ['C3', 'D3', 'E3', 'F3', 'G3'];
 const PATTERN_SIZE = 200; // Size of each pattern canvas
 const PATTERN_PARTICLES = 3000; // Particles per pattern
+const PATTERN_SIMULATION_ITERATIONS = 150; // Number of simulation steps per pattern
+const PATTERN_VIBRATION_STRENGTH = 0.02; // Vibration strength for pattern simulation
+const PATTERN_MIN_WALK = 0.002; // Minimum walk distance for pattern simulation
 
 // Calculate m,n parameters for a given instrument and frequency
 // This is a synchronous version that doesn't require audio analysis
@@ -1203,18 +1206,14 @@ const generatePatternCanvas = (mVal, nVal, size = PATTERN_SIZE, numParticles = P
   }
   
   // Simulate particle movement (similar to main simulation but faster)
-  const iterations = 150; // Number of simulation steps
-  const vib = 0.02; // Vibration strength
-  const minWalkVal = 0.002;
-  
-  for (let iter = 0; iter < iterations; iter++) {
+  for (let iter = 0; iter < PATTERN_SIMULATION_ITERATIONS; iter++) {
     for (let p of particles) {
       // Calculate chladni value
       const eq = a * Math.sin(pi * nVal * p.x) * Math.sin(pi * mVal * p.y) 
                + b * Math.sin(pi * mVal * p.x) * Math.sin(pi * nVal * p.y);
       
-      let stochasticAmp = vib * Math.abs(eq);
-      if (stochasticAmp <= minWalkVal) stochasticAmp = minWalkVal;
+      let stochasticAmp = PATTERN_VIBRATION_STRENGTH * Math.abs(eq);
+      if (stochasticAmp <= PATTERN_MIN_WALK) stochasticAmp = PATTERN_MIN_WALK;
       
       // Random walk
       p.x += (Math.random() - 0.5) * 2 * stochasticAmp;
@@ -1248,8 +1247,8 @@ const generatePatternGrid = () => {
   // Add loading message
   gridContainer.innerHTML = '<p class="grid-placeholder">Generating patterns...</p>';
   
-  // Use setTimeout to allow UI update before heavy computation
-  setTimeout(() => {
+  // Use requestAnimationFrame to allow UI update before heavy computation
+  requestAnimationFrame(() => {
     gridContainer.innerHTML = '';
     
     // Generate patterns for each note
@@ -1281,7 +1280,7 @@ const generatePatternGrid = () => {
     }
     
     showNotification('Grid generated! Click "Copy to Clipboard" to copy.', 'success');
-  }, 50);
+  });
 };
 
 // Copy the grid to clipboard as a single image
@@ -1340,10 +1339,28 @@ const copyGridToClipboard = async () => {
       const x = col * cellWidth + padding;
       const y = row * cellHeight + headerHeight;
       
-      // Cell background
+      // Cell background with rounded corners
       ctx.fillStyle = '#252525';
       ctx.beginPath();
-      ctx.roundRect(x, y, cellWidth - padding, cellHeight - padding, 8);
+      // Use roundRect if available, otherwise fall back to regular rect
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, cellWidth - padding, cellHeight - padding, 8);
+      } else {
+        // Fallback for browsers without roundRect support
+        const width = cellWidth - padding;
+        const height = cellHeight - padding;
+        const radius = 8;
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.arcTo(x + width, y, x + width, y + radius, radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+        ctx.lineTo(x + radius, y + height);
+        ctx.arcTo(x, y + height, x, y + height - radius, radius);
+        ctx.lineTo(x, y + radius);
+        ctx.arcTo(x, y, x + radius, y, radius);
+        ctx.closePath();
+      }
       ctx.fill();
       
       // Pattern image
@@ -1376,7 +1393,7 @@ const copyGridToClipboard = async () => {
     // Convert to blob and copy
     combinedCanvas.toBlob(async (blob) => {
       if (!blob) {
-        showNotification('Failed to create image', 'error');
+        showNotification('Failed to generate grid image', 'error');
         return;
       }
       

@@ -103,14 +103,20 @@
 			<legend>frequency parameters:</legend>
 
 			<label for="mSlider">m</label>
-			<input name="mSlider" type="range" id="mSlider" min="1" max="500" step="1" value="50">
-			<span id="mValue">50</span>
+			<input name="mSlider" type="range" id="mSlider" min="1" max="18" step="0.1" value="9">
+			<span id="mValue">9</span>
 
 			<br>
 
 			<label for="nSlider">n</label>
-			<input name="nSlider" type="range" id="nSlider" min="1" max="500" step="1" value="50">
-			<span id="nValue">50</span>
+			<input name="nSlider" type="range" id="nSlider" min="1" max="18" step="0.1" value="9">
+			<span id="nValue">9</span>
+
+			<br>
+
+			<label for="frequencyInput">Specific Frequency (Hz):</label>
+			<input name="frequencyInput" type="number" id="frequencyInput" min="20" max="2000" step="0.01" placeholder="e.g. 440.00">
+			<button type="button" id="applyFrequencyBtn">Apply</button>
 		</fieldset>	
 
 		<label for="vSlider">vibration strength:</label>

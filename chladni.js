@@ -26,9 +26,9 @@ const NOTE_SUSTAIN_TIME = 1.5; // seconds - ADSR envelope sustain time
 const NOTE_PEAK_GAIN = 0.3; // peak volume level during attack
 const NOTE_SUSTAIN_GAIN = 0.2; // sustain volume level
 const M_PARAM_MIN = 1; // Minimum value for m parameter
-const M_PARAM_MAX = 500; // Maximum value for m parameter (increased 100x for dramatic variation)
+const M_PARAM_MAX = 18; // Maximum value for m parameter
 const N_PARAM_MIN = 1; // Minimum value for n parameter  
-const N_PARAM_MAX = 500; // Maximum value for n parameter (increased 100x for dramatic variation)
+const N_PARAM_MAX = 18; // Maximum value for n parameter
 const N_OFFSET_FACTOR = 0.15; // Factor for offsetting n parameter mapping to create variation from m
 const NOTE_FREQUENCY_N_OFFSET = (MAX_NOTE_FREQUENCY - MIN_NOTE_FREQUENCY) * N_OFFSET_FACTOR; // Pre-calculated offset for n parameter mapping
 const MAX_HARMONIC_MULTIPLIER_M = 1.05; // Maximum harmonic multiplier for m (violin: 1.05)
@@ -148,10 +148,10 @@ const DOMinit = () => {
   
   // update value displays when sliders change
   sliders.m.input(() => {
-    mValueDisplay.textContent = sliders.m.value();
+    mValueDisplay.textContent = parseFloat(sliders.m.value()).toFixed(1);
   });
   sliders.n.input(() => {
-    nValueDisplay.textContent = sliders.n.value();
+    nValueDisplay.textContent = parseFloat(sliders.n.value()).toFixed(1);
   });
 
   // audio controls
@@ -206,6 +206,26 @@ const DOMinit = () => {
   });
 
   playNoteBtn.addEventListener('click', playInstrumentNote);
+
+  // setup specific frequency input
+  const frequencyInput = document.getElementById('frequencyInput');
+  const applyFrequencyBtn = document.getElementById('applyFrequencyBtn');
+  
+  applyFrequencyBtn.addEventListener('click', () => {
+    const frequency = parseFloat(frequencyInput.value);
+    if (frequency && frequency >= 20 && frequency <= 2000) {
+      applySpecificFrequency(frequency);
+    } else {
+      alert('Please enter a frequency between 20 and 2000 Hz');
+    }
+  });
+
+  // Allow pressing Enter to apply frequency
+  frequencyInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      applyFrequencyBtn.click();
+    }
+  });
 }
 
 const setupParticles = () => {
@@ -297,7 +317,7 @@ const mapFrequencyToRange = (frequency, minFreq, maxFreq, minRange, maxRange) =>
   const logMinFreq = Math.log(minFreq);
   const logMaxFreq = Math.log(maxFreq);
   const mapped = (logFreq - logMinFreq) * (maxRange - minRange) / (logMaxFreq - logMinFreq) + minRange;
-  return Math.floor(mapped);
+  return mapped; // Return the mapped value without flooring to allow decimals
 };
 
 // Helper function to map frequency to parameter with offset and clamping
@@ -315,8 +335,9 @@ const updateParameterSliders = (mValue, nValue) => {
   if (mSlider) mSlider.value = mValue;
   if (nSlider) nSlider.value = nValue;
   
-  document.getElementById('mValue').textContent = mValue;
-  document.getElementById('nValue').textContent = nValue;
+  // Display values with 1 decimal place
+  document.getElementById('mValue').textContent = parseFloat(mValue).toFixed(1);
+  document.getElementById('nValue').textContent = parseFloat(nValue).toFixed(1);
 };
 
 // Helper function to clamp Chladni parameters to valid ranges
@@ -324,6 +345,23 @@ const clampChladniParameters = (mValue, nValue) => {
   const clampedM = Math.max(M_PARAM_MIN, Math.min(M_PARAM_MAX, mValue));
   const clampedN = Math.max(N_PARAM_MIN, Math.min(N_PARAM_MAX, nValue));
   return { m: clampedM, n: clampedN };
+};
+
+// Function to apply a specific frequency to m and n parameters
+const applySpecificFrequency = (frequency) => {
+  // Map the frequency to m and n values using logarithmic scaling
+  const mValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, M_PARAM_MIN, M_PARAM_MAX);
+  const nValue = mapFrequencyToRange(frequency + FREQUENCY_LOG_OFFSET + NOTE_FREQUENCY_N_OFFSET, MIN_FREQUENCY_MAPPING, MAX_FREQUENCY_MAPPING, N_PARAM_MIN, N_PARAM_MAX);
+  
+  // Clamp values to valid ranges
+  const clamped = clampChladniParameters(mValue, nValue);
+  
+  // Update sliders and displays
+  updateParameterSliders(clamped.m, clamped.n);
+  
+  // Update global m and n values
+  m = clamped.m;
+  n = clamped.n;
 };
 
 const handleAudioUpload = (event) => {

@@ -43,6 +43,7 @@ const MAX_FUNDAMENTAL_SEARCH_FREQ = 800; // Hz - maximum frequency to search for
 const PLATE_LENGTH = 0.5; // meters - typical square plate size
 const WAVE_SPEED = 31.0; // m/s - calibrated for musical frequency range
 const PHYSICS_CONSTANT = WAVE_SPEED / (2 * PLATE_LENGTH); // c/2L in Hz ≈ 31 Hz
+const PHYSICS_TOLERANCE_FACTOR = 1.5; // Tolerance multiplier for finding valid (m,n) pairs
 
 // Instrument differentiation via pattern selection weights
 // When multiple (m,n) pairs satisfy a frequency, these weights determine preference
@@ -855,10 +856,10 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   const validPairs = [];
   
   for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
-    for (let testN = M_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+    for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
       const sum = testM * testM + testN * testN;
       // Generous tolerance to allow multiple solutions for instrument differentiation
-      const tolerance = 1.5 * (testM + testN);
+      const tolerance = PHYSICS_TOLERANCE_FACTOR * (testM + testN);
       if (Math.abs(sum - targetSum) <= tolerance) {
         validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
       }
@@ -869,7 +870,7 @@ const analyzeInstrumentSpectrum = (instrument, note, frequency) => {
   if (validPairs.length === 0) {
     const allPairs = [];
     for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
-      for (let testN = M_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+      for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
         const sum = testM * testM + testN * testN;
         const diff = Math.abs(sum - targetSum);
         allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });

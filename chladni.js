@@ -143,6 +143,45 @@ function initMobileUI() {
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', copyScreenshotToClipboard);
   }
+
+  // Grid screenshot modal
+  const gridScreenshotBtn = document.getElementById('gridScreenshotBtn');
+  const gridModal = document.getElementById('gridModal');
+  const closeGridModalBtn = document.getElementById('closeGridModalBtn');
+  const generateGridBtn = document.getElementById('generateGridBtn');
+  const copyGridBtn = document.getElementById('copyGridBtn');
+
+  if (gridScreenshotBtn && gridModal) {
+    gridScreenshotBtn.addEventListener('click', () => {
+      gridModal.classList.add('show');
+      gridModal.setAttribute('aria-hidden', 'false');
+    });
+  }
+
+  if (closeGridModalBtn && gridModal) {
+    closeGridModalBtn.addEventListener('click', () => {
+      gridModal.classList.remove('show');
+      gridModal.setAttribute('aria-hidden', 'true');
+    });
+  }
+
+  if (gridModal) {
+    // Close modal when clicking outside content
+    gridModal.addEventListener('click', (e) => {
+      if (e.target === gridModal) {
+        gridModal.classList.remove('show');
+        gridModal.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+
+  if (generateGridBtn) {
+    generateGridBtn.addEventListener('click', generatePatternGrid);
+  }
+
+  if (copyGridBtn) {
+    copyGridBtn.addEventListener('click', copyGridToClipboard);
+  }
 }
 
 
@@ -1209,6 +1248,329 @@ const showNotification = (message, type = 'success') => {
     notification.classList.remove('show');
   }, 3000);
 }
+
+/* Grid Pattern Generation Functions */
+
+// Notes for the grid (C3 through G3)
+const GRID_NOTES = ['C3', 'D3', 'E3', 'F3', 'G3'];
+const PATTERN_SIZE = 200; // Size of each pattern canvas
+const PATTERN_PARTICLES = 3000; // Particles per pattern
+const PATTERN_SIMULATION_ITERATIONS = 150; // Number of simulation steps per pattern
+const PATTERN_VIBRATION_STRENGTH = 0.02; // Vibration strength for pattern simulation
+const PATTERN_MIN_WALK = 0.002; // Minimum walk distance for pattern simulation
+
+// Calculate m,n parameters for a given instrument and frequency
+// This is a synchronous version that doesn't require audio analysis
+const calculatePatternParams = (instrument, frequency) => {
+  // Physics-based calculation of m and n from frequency
+  // Using the Chladni plate resonance formula: f_mn = (c/2L) × √(m² + n²)
+  const targetSum = Math.pow(frequency / PHYSICS_CONSTANT, 2);
+  
+  // Find all valid (m, n) pairs that satisfy the frequency equation
+  const validPairs = [];
+  
+  for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+    for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+      const sum = testM * testM + testN * testN;
+      const tolerance = PHYSICS_TOLERANCE_FACTOR * (testM + testN);
+      if (Math.abs(sum - targetSum) <= tolerance) {
+        validPairs.push({ m: testM, n: testN, sum: sum, diff: Math.abs(sum - targetSum) });
+      }
+    }
+  }
+  
+  // If no matches found, find closest matches
+  if (validPairs.length === 0) {
+    const allPairs = [];
+    for (let testM = M_PARAM_MIN; testM <= M_PARAM_MAX; testM++) {
+      for (let testN = N_PARAM_MIN; testN <= N_PARAM_MAX; testN++) {
+        const sum = testM * testM + testN * testN;
+        const diff = Math.abs(sum - targetSum);
+        allPairs.push({ m: testM, n: testN, sum: sum, diff: diff });
+      }
+    }
+    allPairs.sort((a, b) => a.diff - b.diff);
+    validPairs.push(...allPairs.slice(0, PHYSICS_FALLBACK_PAIRS));
+  }
+  
+  // Get instrument-specific preference weights
+  const weights = INSTRUMENT_WEIGHTS[instrument] || INSTRUMENT_WEIGHTS['default'];
+  
+  // Use a default harmonic weight based on instrument characteristics
+  let harmonicWeight = 0.5;
+  if (instrument === 'piano') harmonicWeight = 0.7;
+  else if (instrument === 'guitar') harmonicWeight = 0.3;
+  else if (instrument === 'violin') harmonicWeight = 0.6;
+  else if (instrument === 'flute') harmonicWeight = 0.2;
+  else if (instrument === 'trumpet') harmonicWeight = 0.8;
+  else if (instrument === 'cello') harmonicWeight = 0.5;
+  
+  // Select best (m,n) pair based on instrument preferences
+  let bestPair = validPairs[0];
+  let bestScore = -Infinity;
+  
+  for (let pair of validPairs) {
+    const mNorm = (pair.m - M_PARAM_MIN) / (M_PARAM_MAX - M_PARAM_MIN);
+    const nNorm = (pair.n - N_PARAM_MIN) / (N_PARAM_MAX - N_PARAM_MIN);
+    
+    const mTarget = weights.m_preference * (0.5 + 0.5 * harmonicWeight);
+    const nTarget = weights.n_preference * (0.5 + 0.5 * harmonicWeight);
+    
+    const mScore = 1 - Math.abs(mNorm - mTarget);
+    const nScore = 1 - Math.abs(nNorm - nTarget);
+    const accuracyScore = 1 / (1 + pair.diff / (targetSum + 1));
+    
+    const totalScore = accuracyScore * 2 + mScore * 3 + nScore * 3;
+    
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestPair = pair;
+    }
+  }
+  
+  // Apply instrument-specific offsets
+  const mOffset = weights.m_offset || 0;
+  const nOffset = weights.n_offset || 0;
+  
+  let mVal = bestPair.m + mOffset;
+  let nVal = bestPair.n + nOffset;
+  
+  // Handle overflow by wrapping
+  if (mVal > M_PARAM_MAX) mVal = M_PARAM_MIN + (mVal - M_PARAM_MAX - 1);
+  if (nVal > N_PARAM_MAX) nVal = N_PARAM_MIN + (nVal - N_PARAM_MAX - 1);
+  
+  // Final constraint
+  const clamped = clampChladniParameters(mVal, nVal);
+  return { m: clamped.m, n: clamped.n };
+};
+
+// Generate a single pattern on an offscreen canvas
+const generatePatternCanvas = (mVal, nVal, size = PATTERN_SIZE, numParticles = PATTERN_PARTICLES) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  
+  // Background
+  ctx.fillStyle = 'rgb(30, 30, 30)';
+  ctx.fillRect(0, 0, size, size);
+  
+  // Generate particles and simulate their movement
+  const particles = [];
+  for (let i = 0; i < numParticles; i++) {
+    particles.push({
+      x: Math.random(),
+      y: Math.random()
+    });
+  }
+  
+  // Simulate particle movement (similar to main simulation but faster)
+  for (let iter = 0; iter < PATTERN_SIMULATION_ITERATIONS; iter++) {
+    for (let p of particles) {
+      // Calculate chladni value
+      const eq = a * Math.sin(pi * nVal * p.x) * Math.sin(pi * mVal * p.y) 
+               + b * Math.sin(pi * mVal * p.x) * Math.sin(pi * nVal * p.y);
+      
+      let stochasticAmp = PATTERN_VIBRATION_STRENGTH * Math.abs(eq);
+      if (stochasticAmp <= PATTERN_MIN_WALK) stochasticAmp = PATTERN_MIN_WALK;
+      
+      // Random walk
+      p.x += (Math.random() - 0.5) * 2 * stochasticAmp;
+      p.y += (Math.random() - 0.5) * 2 * stochasticAmp;
+      
+      // Boundary conditions
+      if (p.x < 0) p.x = 0;
+      if (p.x > 1) p.x = 1;
+      if (p.y < 0) p.y = 0;
+      if (p.y > 1) p.y = 1;
+    }
+  }
+  
+  // Draw particles
+  ctx.fillStyle = 'white';
+  for (let p of particles) {
+    ctx.fillRect(p.x * size, p.y * size, 1, 1);
+  }
+  
+  return canvas;
+};
+
+// Generate the full pattern grid
+const generatePatternGrid = () => {
+  const instrument = document.getElementById('gridInstrumentSelect').value;
+  const gridContainer = document.getElementById('gridContainer');
+  
+  // Clear existing content
+  gridContainer.innerHTML = '';
+  
+  // Add loading message
+  gridContainer.innerHTML = '<p class="grid-placeholder">Generating patterns...</p>';
+  
+  // Use requestAnimationFrame to allow UI update before heavy computation
+  requestAnimationFrame(() => {
+    gridContainer.innerHTML = '';
+    
+    // Generate patterns for each note
+    for (const note of GRID_NOTES) {
+      const frequency = noteFrequencies[note];
+      const params = calculatePatternParams(instrument, frequency);
+      
+      // Create pattern cell
+      const cell = document.createElement('div');
+      cell.className = 'pattern-cell';
+      
+      // Generate pattern canvas
+      const patternCanvas = generatePatternCanvas(params.m, params.n);
+      cell.appendChild(patternCanvas);
+      
+      // Add label
+      const label = document.createElement('div');
+      label.className = 'pattern-label';
+      label.textContent = `${instrument.charAt(0).toUpperCase() + instrument.slice(1)} ${note}`;
+      cell.appendChild(label);
+      
+      // Add frequency info
+      const paramsInfo = document.createElement('div');
+      paramsInfo.className = 'pattern-params';
+      paramsInfo.textContent = `${frequency.toFixed(2)} Hz | m=${params.m}, n=${params.n}`;
+      cell.appendChild(paramsInfo);
+      
+      gridContainer.appendChild(cell);
+    }
+    
+    showNotification('Grid generated! Click "Copy to Clipboard" to copy.', 'success');
+  });
+};
+
+// Copy the grid to clipboard as a single image
+const copyGridToClipboard = async () => {
+  const gridContainer = document.getElementById('gridContainer');
+  const cells = gridContainer.querySelectorAll('.pattern-cell');
+  
+  if (cells.length === 0) {
+    showNotification('Please generate a grid first!', 'error');
+    return;
+  }
+  
+  try {
+    const instrument = document.getElementById('gridInstrumentSelect').value;
+    const instrumentName = instrument.charAt(0).toUpperCase() + instrument.slice(1);
+    
+    // Calculate dimensions for the combined image
+    const padding = 15;
+    const labelHeight = 45;
+    const headerHeight = 50;
+    const cellWidth = PATTERN_SIZE + padding * 2;
+    const cellHeight = PATTERN_SIZE + labelHeight + padding * 2;
+    const cols = Math.min(cells.length, 5);
+    const rows = Math.ceil(cells.length / 5);
+    
+    const totalWidth = cols * cellWidth + padding;
+    const totalHeight = rows * cellHeight + headerHeight + padding;
+    
+    // Create combined canvas
+    const combinedCanvas = document.createElement('canvas');
+    combinedCanvas.width = totalWidth;
+    combinedCanvas.height = totalHeight;
+    const ctx = combinedCanvas.getContext('2d');
+    
+    // Background
+    ctx.fillStyle = '#191919';
+    ctx.fillRect(0, 0, totalWidth, totalHeight);
+    
+    // Header
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${instrumentName} Chladni Patterns (C3-G3)`, totalWidth / 2, 35);
+    
+    // Draw each pattern
+    let i = 0;
+    for (const cell of cells) {
+      const canvas = cell.querySelector('canvas');
+      const label = cell.querySelector('.pattern-label');
+      const params = cell.querySelector('.pattern-params');
+      
+      if (!canvas) continue;
+      
+      const col = i % 5;
+      const row = Math.floor(i / 5);
+      const x = col * cellWidth + padding;
+      const y = row * cellHeight + headerHeight;
+      
+      // Cell background with rounded corners
+      ctx.fillStyle = '#252525';
+      ctx.beginPath();
+      // Use roundRect if available, otherwise fall back to regular rect
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, cellWidth - padding, cellHeight - padding, 8);
+      } else {
+        // Fallback for browsers without roundRect support
+        const width = cellWidth - padding;
+        const height = cellHeight - padding;
+        const radius = 8;
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.arcTo(x + width, y, x + width, y + radius, radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+        ctx.lineTo(x + radius, y + height);
+        ctx.arcTo(x, y + height, x, y + height - radius, radius);
+        ctx.lineTo(x, y + radius);
+        ctx.arcTo(x, y, x + radius, y, radius);
+        ctx.closePath();
+      }
+      ctx.fill();
+      
+      // Pattern image
+      ctx.drawImage(canvas, x + padding, y + padding);
+      
+      // Label
+      if (label) {
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(label.textContent, x + cellWidth / 2 - padding / 2, y + PATTERN_SIZE + padding * 2 + 5);
+      }
+      
+      // Parameters
+      if (params) {
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '11px monospace';
+        ctx.fillText(params.textContent, x + cellWidth / 2 - padding / 2, y + PATTERN_SIZE + padding * 2 + 22);
+      }
+      
+      i++;
+    }
+    
+    // Check if clipboard API is supported
+    if (!navigator.clipboard || !navigator.clipboard.write) {
+      showNotification('Clipboard API not supported in this browser', 'error');
+      return;
+    }
+    
+    // Convert to blob and copy
+    combinedCanvas.toBlob(async (blob) => {
+      if (!blob) {
+        showNotification('Failed to generate grid image', 'error');
+        return;
+      }
+      
+      try {
+        const clipboardItem = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([clipboardItem]);
+        showNotification('Grid copied to clipboard!', 'success');
+      } catch (err) {
+        console.error('Failed to copy grid to clipboard:', err);
+        showNotification('Failed to copy. Try again.', 'error');
+      }
+    }, 'image/png');
+    
+  } catch (err) {
+    console.error('Grid copy error:', err);
+    showNotification('An error occurred. Please try again.', 'error');
+  }
+};
 
 
 /* Timing */
